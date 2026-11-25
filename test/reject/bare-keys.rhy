@@ -1,0 +1,7 @@
+# Must fail: keys are always $-quoted, one per slot.
+#
+# `func 1 2 <- ...` is a call-shaped expression, not a clause head.
+# The correct form is `func $(1) $(2) <- (10, 20, 30);`.
+
+func: [int] [int] (int, int, int);
+func 1 2 <- (10, 20, 30);

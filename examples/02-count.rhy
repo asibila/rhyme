@@ -1,0 +1,14 @@
+# 02 — recursion by clauses
+#
+# A function is a set of clauses sharing a name. Each key is a pattern at the
+# parameter's type: $[X:] binds a value slot, $(new_rec) matches a constructor.
+#
+# There is no arithmetic, so the count is unary: a rec of units, one per
+# element. unshift_rec () prepends a unit for each cons.
+#
+# needs: the `rec` type from 03-rec-type.rhy
+
+count: [rec [T:]] rec ();
+$count <- [m:] new_rec;          # body: binds the declared arity
+count $(new_rec) <- new_rec;
+count $(unshift_rec $[X:] $[Y:]) <- unshift_rec () (count (Y));

@@ -1,0 +1,12 @@
+
+
+getchar: [] char;
+getline: [] string;
+putchar: [char];
+putline: [string];
+print: [string];
+
+
+
+
+

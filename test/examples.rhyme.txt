@@ -1,0 +1,117 @@
+=== fgh
+F: [?] string;
+$F <- [] "";
+F $[int] <- "int";
+F $[string] <- "string";
+print (F int);
+
+G: [int] string;
+$G <- [] "";
+G $(1) <- "one";
+G $(2) <- "two";
+print (G 2);
+
+H: [=> ?] string;
+$H <- [] "";
+H $(int => 1) <- "one";
+print (H 1);
+
+=== count
+count: [rec [T:]] int;
+$count <- [] 0;
+count $(new_rec) <- 0;
+count $(unshift_rec $[X:] $[Y:]) <- 1 + count (Y);
+
+=== rec-type
+rec: [T: ?] `` => (
+	new_rec: `new_rec`;
+	unshift_rec: [T] [rec T] ``;
+);
+
+=== bool-type
+bool: `bool` => (false: `F`; true: `T`);
+
+=== point
+point: `point` => ( new_point: [int] [int] `point`; );
+
+get_point: point;
+$get_point <- new_point 10 20;
+$(new_point $[X:] $[Y:]) <- get_point;
+print (X + Y);
+
+=== tuple-func
+func: [int] [int] (int, int, int);
+$func <- [] (0, 0, 0);
+func $(1) $(2) <- (10, 20, 30);
+
+$(a:, b:, c:) <- func 1 2;
+print (a + b + c);
+
+=== REJECT keys must be $-quoted
+func: [int] [int] (int, int, int);
+func 1 2 <- (10, 20, 30);
+
+=== shadow
+func_1: [int] int;
+$func_1 <- [var_1:] (n:) {
+	$var_1 <- 123;
+	$n <- 123;
+};
+
+var_1: int;
+$var_1 <- 222;
+print (func_1 var_1);
+print (var_1);
+
+=== higher-order
+value: int;
+$value <- 0;
+
+assign_value: [int] ();
+$assign_value <- [n:] () { $value <- n };
+
+apply_123: [F: [int]()] () { F 123; };
+apply_123 assign_value;
+print (value);
+
+=== var-record
+var_id: int;
+$var_id <- 0;
+
+var: `var` => new_var: `new_var-\(id:int)-\(value:int)-\(assign_value:[int]())` {
+	$id <- var_id;
+	$var_id <- var_id + 1;
+	$value <- 0;
+	$assign_value <- [x:] () { $value <- x };
+};
+
+replace_and_return_old: [var] int;
+$replace_and_return_old <- [v:] (res:) {
+	$res <- v.value;
+	v.assign_value 123;
+};
+
+V1: var;
+$V1 <- new_var;
+V1.value <- 1000;
+print (replace_and_return_old V1);
+print (replace_and_return_old V1);
+
+=== module-expr
+#!/bin/rhyme
+123
+
+=== module-string
+#!/bin/rhyme
+"abc"
+
+=== module-block
+#!/bin/rhyme
+(n:int) {
+   $n <- 123;
+};
+
+=== ordering
+F: [?] string;
+$F <- [n:] "any";
+F $[int] <- "int";

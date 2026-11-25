@@ -1,0 +1,13 @@
+{
+  "name": "rhyme2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Rhyme2 — language design notes and an executable front end",
+  "scripts": {
+    "check": "node bin/rhyme.mjs examples",
+    "dump": "node bin/rhyme.mjs --dump",
+    "tokens": "node bin/rhyme.mjs --tokens",
+    "test": "node test/run.mjs"
+  }
+}

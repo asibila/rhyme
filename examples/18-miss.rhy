@@ -1,0 +1,30 @@
+# 18 — miss behaviour
+#
+# A function must assign its whole object:
+#   $F <- [m:] "fallback";
+# That body is the fallback at *any* depth, so once the object exists a miss
+# never fails:
+#   F 2          -> fallback      (no key at all)
+#   G 1 false    -> fallback      (partial match, then a miss)
+#   G 2 true     -> fallback      (miss on the first argument)
+#
+# Keys only refine the body. Without a body the program is rejected, even when
+# keys are present:
+#   H $(1) <- "one";   # FAIL: $H has not been assigned
+
+F: [int] string;
+$F <- [m:] "fallback";            # whole object
+F $(1) <- "one";
+print (F 1);                    # one
+print (F 2);                    # fallback
+
+G: [int] [bool] string;
+$G <- [m:] [n:] "fallback";            # whole object
+G $(1) $(true) <- "one-true";
+print (G 1 true);               # one-true
+print (G 1 false);              # fallback -  miss after a partial match
+print (G 2 true);               # fallback -  miss on the first argument
+
+H: [int] string;
+H $(1) <- "one";                # FAIL - $H has not been assigned ; no whole-object body at all
+print (H 2);                    # ? nothing to fall back to

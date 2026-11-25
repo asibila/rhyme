@@ -1,0 +1,12 @@
+# 06 — products and tuple destructuring
+#
+# `(int, int, int)` is a product type; `(10, 20, 30)` is a value of it.
+# Keys are always $-quoted, one per slot: `func $(1) $(2)`.
+# `:` is ascription only, so destructuring is a $-pattern binding.
+
+func: [int] [int] (int, int, int);
+$func <- [a:] [b:] (0, 0, 0);   # body: one binder per parameter
+func $(1) $(2) <- (10, 20, 30);
+
+$(a:, b:, c:) <- func 1 2;
+print ((a, b, c));              # (10, 20, 30)

@@ -1,0 +1,21 @@
+# 20 — relational and logical operators
+#
+# Tightest to loosest:
+#   f x   (application)
+#   !     (prefix: !f x is !(f x), and !n == 3 is (!n) == 3)
+#   <  <=  >  >=
+#   ==  !=
+#   &&
+#   ||
+#
+# There is no arithmetic: ints are compared, not computed with.
+
+bool: `bool` => ( false: `F`; true: `T` );
+
+n: int;
+$n <- 3;
+
+print (n < 3);                      # F
+print (n > 0 && n != 9);            # T
+print (!(n == 3) || false);         # F
+print (true == true && n >= 3);     # T

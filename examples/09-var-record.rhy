@@ -1,0 +1,26 @@
+# 09 — an object with private state
+#
+# The constructor's display literal *declares* its fields via \(name:type).
+# `assign_value` closes over the instance's `value`, so each new_var gets its
+# own cell. `replace_and_return_old` reads before writing.
+#
+# expected output:
+#   1000
+#   123
+
+var: `var` => new_var: `new_var-\(value:int)-\(assign_value:[int]())` {
+	$value <- 0;
+	$assign_value <- [x:] () { $value <- x };
+};
+
+replace_and_return_old: [var] int;
+$replace_and_return_old <- [v:] (res:) {
+	$res <- v.value;
+	v.assign_value 123;
+};
+
+V1: var;
+$V1 <- new_var;
+V1.value <- 1000;
+print (replace_and_return_old V1);   # 1000
+print (replace_and_return_old V1);   # 123

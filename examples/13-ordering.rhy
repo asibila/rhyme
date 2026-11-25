@@ -1,0 +1,9 @@
+# 13 — whole-object body vs per-key clause
+#
+# `$F <- [n:] ...` assigns the whole object and is the least specific branch.
+# `F $[int] <- ...` assigns one key, so it shadows the body for int arguments.
+# Both specificity and source order matter.
+
+F: [?] string;
+$F <- [n:] "any";               # whole object
+F $[int] <- "int";              # part of it: wins for a type argument

@@ -1,0 +1,12 @@
+# 22 — escaping inside a display template
+#
+# Backslash escapes the next character:
+#   \\   a literal backslash
+#   \`   a literal backtick
+#   \(   a hole           (so \\( is literal text, not a hole)
+#
+# This template therefore has no holes at all.
+
+t: `t` => (
+	c: [x: int] `literal \\(not a hole) and \` a backtick`;
+);

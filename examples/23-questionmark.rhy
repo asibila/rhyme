@@ -1,0 +1,56 @@
+
+# 1. map from string to type - example, give type from string
+
+F: [string] ?; 
+$F <- [n:] void;
+
+F $("bool") <- bool;
+F $("int") <- int;
+F $("string") <- string;
+
+func_1: [F "bool"] string; # you might use it like this
+
+# 2. take any type - example, print the value
+
+G: [=> ?] string;
+$G <- [n:] "";
+
+G $(int => n:) <- print_int n;
+G $(float => n:) <- print_float n;
+G $(bool => n:) <- print_bool n;
+
+G 123; # calls print_int
+G 23.4; # calls print_float
+G "asdf"; # calls default method
+
+# 3. return any type - example, return default value for type
+
+H: => [string] ?;
+
+$H <- [n:] void;
+
+H $("int") <- 0;
+H $("string") <- "";
+H $("bool") <- false;
+
+
+# 4. take type - example, map type to string
+
+I: [?] string;
+$I <- [n:] "(unknown)";
+
+I $[int] <- "int";
+I $[string] <- "string";
+
+
+# 5. useful example, return key type from container type:
+
+key: [[?]?]?;
+$key <- [n:] void;
+
+key $[array] <- int;
+key $[dict $[k:]] <- k;
+
+
+
+

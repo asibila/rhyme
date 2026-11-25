@@ -1,0 +1,15 @@
+# 07 — scope: assign the nearest binding
+#
+# Brackets bind parameters; parens declare the result of the body.
+# `$var_1 <- 123` assigns the *parameter*, so the outer var_1 is untouched.
+
+func_1: [int] int;
+$func_1 <- [var_1:] (n:) {
+	$var_1 <- 123;
+	$n <- 123;                  # fills the result slot declared by (n:)
+};
+
+var_1: int;
+$var_1 <- 222;
+print (func_1 var_1);           # 123
+print (var_1);                  # 222

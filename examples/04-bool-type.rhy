@@ -1,0 +1,6 @@
+# 04 — a sum type with per-constructor rendering
+#
+# The first literal renders the *type*; each constructor has its own literal.
+# So `true` prints as T, not as `true`.
+
+bool: `bool` => (false: `F`; true: `T`);

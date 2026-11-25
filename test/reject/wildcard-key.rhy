@@ -1,0 +1,8 @@
+# Must fail: there is no `$(?)` wildcard.
+#
+# A slot you do not care about is bound as $[X:] and left unused. `?` is only
+# the value side of a typed pair, as in $(int => ?).
+
+F: [int] string;
+$F <- [x:] "";
+F $(?) <- "any";        # error: use $[X:] to ignore the slot

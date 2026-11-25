@@ -1,0 +1,27 @@
+# 01 — three kinds of dispatch
+#
+# F takes a *type*  -> keys are $[ ... ]  (the slot's type is ?)
+# G takes an int     -> keys are $( ... )  (the slot holds a value)
+# H takes a typed pair: `H 1` injects `(int => 1)` before matching.
+#
+# expected output:
+#   int
+#   two
+#   one
+
+F: [?] string;
+$F <- [x:] "";
+F $[int] <- "int";
+F $[string] <- "string";
+print (F int);                  # int
+
+G: [int] string;
+$G <- [x:] "";
+G $(1) <- "one";
+G $(2) <- "two";
+print (G 2);                    # two
+
+H: [=> ?] string;               # a value together with its type
+$H <- [x:] "";
+H $(int => 1) <- "one";
+print (H 1);                    # one

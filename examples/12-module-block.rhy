@@ -1,0 +1,9 @@
+# 12 — a module with a declared result
+#
+# `(n:int)` is a declaration list, not a parameter list; the body assigns it.
+# The module's value is `n`, so this renders 123.
+
+#!/bin/rhyme
+(n:int) {
+   $n <- 123;
+};

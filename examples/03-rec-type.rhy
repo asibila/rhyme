@@ -1,0 +1,10 @@
+# 03 — a recursive, parameterised type
+#
+# `rec` is a curried type constructor: `rec T` applies it by juxtaposition.
+# `unshift_rec` is curried too: [T] -> [rec T] -> rec T.
+# Empty backticks mean "renders no text"; they are still a display slot.
+
+rec: [T: ?] `` => (
+	new_rec: `new_rec`;
+	unshift_rec: [T] [rec T] ``;
+);

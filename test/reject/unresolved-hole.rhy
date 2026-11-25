@@ -1,0 +1,4 @@
+# Must fail: a bare \(name) hole must resolve to a declared binder.
+# The constructor only declares `x`, so `nope` is unresolved.
+
+t: `t` => ( c: [x: int] `\(nope)`; );

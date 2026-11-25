@@ -1,0 +1,6 @@
+# 11 — a module whose body is a string
+#
+# Strings render with their double quotes kept: "abc".
+
+#!/bin/rhyme
+"abc"

@@ -1,0 +1,21 @@
+# 17 — a cast is unification; unknowns need a runtime pattern
+#
+# F returns an unknown type, written `?`.
+#
+#   F: [int] ?;
+#   $[int] <- F 123;          # compile error: ? does not unify with int
+#
+# To accept the program and check at run time, destructure the typed pair:
+#
+#   $(int => ?) <- F 123;     # accepted; may fail at run time
+#
+# So:
+#   $[T] <- e       static cast, no runtime check, T must unify
+#   $(T => ?) <- e  runtime type test: accepted, may fail at run time
+#
+# This file is the accepted form. The rejected line stays commented out.
+
+F: [int] ?;
+
+# $[int] <- F 123;            # compile error
+$(int => ?) <- F 123;         # accepted, runtime-checked

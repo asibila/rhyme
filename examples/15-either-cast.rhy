@@ -1,0 +1,28 @@
+# 15 — parameterised types, display holes, and a cast
+#
+# `either` has two type parameters, and its display template references them:
+#   `either-\(T)-\(U)`
+# Constructors name their parameters, and their templates reference those:
+#   left: [reason: T] `\(reason)`
+#
+# Hole rules:
+#   \(name)       references a binder that is already declared
+#   \(name:type)  declares a field of that type and renders it
+#
+# `$[either int string] <- left 1` is a cast: the value `left 1`, typed as
+# `either int string`. In expression position a headless $[T] definition is an
+# ascription, not a binding.
+
+(n: int) {
+	bool: `bool` => ( false: `F`; true: `T` );
+	
+	F: [=> ?] string;
+	F $(int => 123) <- "";
+
+	either: [T: ?] [U: ?] `either-\(T)-\(U)` => (
+		left: [reason: T] `\(reason)`;
+		right: [value: U] `\(value)`;
+	);
+
+	print ($[either int string] <- left 1);
+};

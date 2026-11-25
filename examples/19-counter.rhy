@@ -1,0 +1,41 @@
+# 19 — an object with private state and fresh identity
+#
+# There is no arithmetic operator, so `succ` is a table: the increment is
+# explicit, and beyond its keys it falls back to the identity body.
+#
+# The constructor's display literal is its public interface: `num` is declared
+# in the body but omitted from the template, so it is hidden.
+#
+# expected output:
+#   0
+#   1
+
+counter_id: int;
+$counter_id <- 0;
+
+succ: [int] int;
+$succ <- [n:] n;                # body: identity outside the table
+succ $(0) <- 1;
+succ $(1) <- 2;
+succ $(2) <- 3;
+
+new_counter: [] `\(id)\(increment)` {
+	id: int;
+	$id <- counter_id;
+	$counter_id <- succ counter_id;
+
+	num: int;
+	$num <- 0;
+
+	increment: [] {
+		$num <- succ num;
+	};
+};
+
+C1: => new_counter ();
+C2: => new_counter ();
+
+print (C1.id);                  # 0
+print (C2.id);                  # 1
+
+C1.increment ();

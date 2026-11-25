@@ -1,0 +1,20 @@
+# 14 — a definition in expression position
+#
+# `$` occurs only left of `<-`, so `$[int] <- n` is a definition wherever it
+# appears, including inside print(...). Parentheses are only grouping.
+#
+# open question: what does a definition evaluate to here — the assigned value
+# (n), the table it builds, or unit?
+
+(n: int) {
+	bool: `bool` => ( false: `F`; true: `T` );
+
+	F $(int => 123) <- "";
+
+	either: [T: ?] [U: ?] `either-\(T)-\(U)` => (
+		left: [reason: T] `\(reason)`;
+		right: [value: U] `\(value)`;
+	);
+
+	print ($[either int string] <- left 1);
+};

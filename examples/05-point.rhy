@@ -1,0 +1,13 @@
+# 05 — records, constructor patterns, and a headless pattern binding
+#
+# `new_point` is curried: [int] [int] -> point, and displays as `point`.
+# The third definition has no name: it destructures a value into X and Y,
+# introducing both into the enclosing scope.
+
+point: `point` => ( new_point: [int] [int] `point`; );
+
+get_point: point;
+$get_point <- new_point 10 20;
+
+$(new_point $[X:] $[Y:]) <- get_point;
+print ((X, Y));                 # (10, 20)
