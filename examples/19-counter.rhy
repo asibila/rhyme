@@ -1,7 +1,8 @@
 # 19 — an object with private state and fresh identity
 #
-# `counter` is a record type; `new_counter` returns one. `\self (inst)` renames
-# the constructor's result so the method can reach the instance.
+# `counter` is a record type; `new_counter` returns one. The constructor fills
+# a named result `inst`, and the method `inc` closes over the constructor's
+# local `num`, so each counter gets its own cell.
 #
 # The display template is the public interface: `num` is a local, not a field.
 #
@@ -12,23 +13,23 @@
 counter_id: int;
 $counter_id <- 0;
 
-succ: [int] int;
-$succ <- [n:] n;                # body: identity outside the table
+succ: [n: int] int;
+$succ <- ... n;                # body: identity outside the table
 succ $(0) <- 1;
 succ $(1) <- 2;
 succ $(2) <- 3;
 
-counter: [id: int] [increment: []] `\(id)\(increment)`;
+counter: [id: int] [increment: [x: unit] ()] `\(id)\(increment)`;
 
-new_counter: [] counter => {
-	\self (inst);
+new_counter: [] counter => ... inst: {
 	$inst.id <- counter_id;
 	$counter_id <- succ counter_id;
 
 	num: int;
 	$num <- 0;
 
-	$inst.increment <- [] { $num <- succ num; };
+	inc: [x: unit] () => ... r: { $num <- succ num; $r <- (); };
+	$inst.increment <- inc;
 };
 
 C1: counter;
@@ -36,7 +37,7 @@ $C1 <- new_counter ();
 C2: counter;
 $C2 <- new_counter ();
 
-\print (C1.id);                  # 0
-\print (C2.id);                  # 1
+$stdout <- (C1.id);                  # 0
+$stdout <- (C2.id);                  # 1
 
 C1.increment ();

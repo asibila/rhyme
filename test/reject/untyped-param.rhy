@@ -1,0 +1,2 @@
+# Must fail: declaration parameters specify their type.
+f: [m:] int;

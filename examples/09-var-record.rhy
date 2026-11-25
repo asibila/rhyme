@@ -1,28 +1,32 @@
 # 09 — an object with private state
 #
-# `var` is a record type; `new_var` returns one. `\self (inst)` renames the
-# constructor's result variable so the method can reach the instance.
+# `var` is a record type; `new_var` returns one. The constructor fills a named
+# result `inst`, so the method can reach the instance. A method is a partial
+# application of an ordinary function: `set_var inst` captures the instance.
 #
 # expected output:
 #   1000
 #   123
 
-var: [value: int] [assign_value: [int]()] `new_var-\(value)-\(assign_value)`;
+var: [value: int] [assign_value: [x: int] ()] `new_var-\(value)-\(assign_value)`;
 
-new_var: [] var => {
-	\self (inst);
-	$inst.value <- 0;
-	$inst.assign_value <- [x:] { $inst.value <- x };
+set_var: [inst: var] [x: int] () => ... r: {
+	$inst.value <- x;
+	$r <- ();
 };
 
-replace_and_return_old: [var] int;
-$replace_and_return_old <- [v:] {
-	$self <- v.value;
+new_var: [] var => ... inst: {
+	$inst.value <- 0;
+	$inst.assign_value <- set_var inst;
+};
+
+replace_and_return_old: [v: var] int => ... r: {
+	$r <- v.value;
 	v.assign_value 123;
 };
 
 V1: var;
 $V1 <- new_var ();
 V1.value <- 1000;
-\print (replace_and_return_old V1);   # 1000
-\print (replace_and_return_old V1);   # 123
+$stdout <- (replace_and_return_old V1);   # 1000
+$stdout <- (replace_and_return_old V1);   # 123

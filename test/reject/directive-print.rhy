@@ -1,0 +1,3 @@
+# Must fail: `\print` is gone. Output is an assignment to `$stdout`.
+#!/bin/rhyme
+\print (123);

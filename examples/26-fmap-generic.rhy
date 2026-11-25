@@ -13,7 +13,7 @@ rec: [T: ?] `` => (
 	unshift_rec: [value: T] [tail: rec T] `\(value)-\(tail)`;
 );
 
-fmap: [C: [?]?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U) => { };
+fmap: [C: [?] ?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U);
 
 fmap $[rec] $[T:] $[U:] $(new_rec) $(func:) <- new_rec;
 fmap $[rec] $[T:] $[U:] $(unshift_rec $[X:] $[Y:]) $(func:) <-
@@ -24,8 +24,8 @@ $nums <- unshift_rec 1 (unshift_rec 2 new_rec);
 
 plus: rec int;
 $plus <- fmap rec int int nums (add 10);
-\print (plus);                   # 11-12-
+$stdout <- (plus);                   # 11-12-
 
 words: rec string;
 $words <- fmap rec int string nums to_string;
-\print (words);                  # "1"-"2"-
+$stdout <- (words);                  # "1"-"2"-

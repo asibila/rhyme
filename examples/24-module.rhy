@@ -1,26 +1,28 @@
 # 24 — records, methods, and a generic fmap
 #
-# `counter` is a record type; `new_counter` returns one. `\self (inst)` reaches
-# the instance from the constructor, and methods are fields holding `[] { … }`.
+# `counter` is a record type; `new_counter` returns one. Methods are ordinary
+# functions declared inside the constructor body, so they close over its state.
 
 counter_id: int;
 $counter_id <- 0;
 
-succ: [int] int;
-$succ <- [n:] add_int n 1;
+succ: [n: int] int;
+$succ <- ... add_int n 1;
 
-counter: [id: int] [increment: []] [get_num: []] `\(id)\(increment)\(get_num)`;
+counter: [id: int] [increment: [x: unit] ()] [get_num: [x: unit] int] `\(id)\(increment)\(get_num)`;
 
-new_counter: [] counter => {
-	\self (inst);
+new_counter: [] counter => ... inst: {
 	$inst.id <- counter_id;
 	$counter_id <- succ counter_id;
 
 	num: int;
 	$num <- 0;
 
-	$inst.increment <- [] { $num <- succ num; };
-	$inst.get_num <- [] { $self <- num; };
+	inc: [x: unit] () => ... r: { $num <- succ num; $r <- (); };
+	get: [x: unit] int => ... r: { $r <- num; };
+
+	$inst.increment <- inc;
+	$inst.get_num <- get;
 };
 
 C1: counter;
@@ -38,7 +40,7 @@ $R <- new_rec;
 $R <- unshift_rec 123 R;
 $R <- unshift_rec 222 R;
 
-fmap: [C: [?]?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U) => { };
+fmap: [C: [?] ?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U);
 
 fmap ${
 	$[rec] <- C;
@@ -57,8 +59,17 @@ $RR <- fmap {
 	$func <- add_int 1000;
 };
 
-\print (C1);
+func: [m: int] string => ... n: { $n <- "" };
+
+#func_2: int => 123;
+
+func_5: [=> ?] int => ... 0;
+func_5 $(int => n:) <- n;
+
+func_6: => ?;
+func_6 <- 123;
 
 
-#$self <- RR;
 
+
+$stdout <- (C1);

@@ -6,9 +6,9 @@
 #
 #   func: [];              unit parameter
 #   assign_value: [int];   int parameter, deduced result
-#   auto_function: [n:];   deduce both the argument and the result type
+#   type_param_auto_function: [n: ?]; an explicit `?` parameter, deduced result
 
 func: [];
 assign_value: [int];
 do_something: [];
-auto_function: [n:];
+type_param_auto_function: [n: ?];

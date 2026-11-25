@@ -22,4 +22,4 @@ either: [T: ?] [U: ?] `either-\(T)-\(U)` => (
 	right: [value: U] `\(value)`;
 );
 
-\print ($[either int string] <- left 1);
+$stdout <- ($[either int string] <- left 1);

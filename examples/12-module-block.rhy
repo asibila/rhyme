@@ -1,6 +1,9 @@
-# 12 — a module with a result
+# 12 — a module with a computed result
 #
-# The paren head is gone; a module's result is `self`.
+# The module is a bare statement list; the result is whatever is assigned to
+# the output sink.
 
 #!/bin/rhyme
-$self <- 123;
+value: int;
+$value <- 123;
+$stdout <- value;

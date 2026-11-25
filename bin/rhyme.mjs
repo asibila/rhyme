@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // rhyme2 — parse .rhy files and print what the grammar made of them.
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, extname, relative } from "node:path";
 import { lex, parse, dump } from "../src/rhyme.mjs";
-import { run, EvalError } from "../src/eval.mjs";
+import { run } from "../src/eval.mjs";
 
 const USAGE = `rhyme2 — parse .rhy files
 
@@ -14,12 +14,14 @@ usage:
 flags:
   --dump      print the AST for each file
   --tokens    print the token stream instead
+  --run       execute each file (stdout + shebang outputs)
   --quiet     only report failures and the summary
   -h, --help  show this text
 
 examples:
   node bin/rhyme.mjs examples
   node bin/rhyme.mjs examples/05-point.rhy
+  node bin/rhyme.mjs --run examples/01-types-fgh.rhy
   node bin/rhyme.mjs --dump examples/09-var-record.rhy
   node bin/rhyme.mjs --tokens examples/01-types-fgh.rhy
 `;
@@ -70,9 +72,9 @@ for (const f of files) {
   const name = relative(process.cwd(), f) || f;
   try {
     if (flags.has("--run")) {
-      const { stdout, value, display } = run(src, { file: name });
+      const { stdout, writes } = run(src, { file: name });
       if (stdout) process.stdout.write(stdout);
-      if (value.k !== "unit") console.log(display);
+      for (const w of writes) writeFileSync(w.path, w.text);
       continue;
     }
     if (flags.has("--tokens")) {

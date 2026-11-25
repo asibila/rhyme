@@ -1,0 +1,6 @@
+# Must fail: `\self` is gone. A body names its result after `...`.
+#!/bin/rhyme
+f: [] int => ... r: {
+	\self (x);
+	$r <- 1;
+};

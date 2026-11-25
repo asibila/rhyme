@@ -1,6 +1,6 @@
 # 10 — a module whose body is a statement list
 #
-# A module has an implicit `self`; its value is what `self` ends up holding.
+# A v3 module has no `self`; a result goes to an output sink such as `$stdout`.
 
 #!/bin/rhyme
-$self <- 123;
+$stdout <- 123;

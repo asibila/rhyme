@@ -1,14 +1,26 @@
 # 08 — higher-order functions and mutation
 #
-# A declaration body needs `=>` before `{`.
+# A declaration body uses `... r: { }` for a statement body with a named result.
 # `assign_value` captures `value`, so the call mutates the module's binding.
 
 value: int;
 $value <- 0;
 
-assign_value: [int] ();
-$assign_value <- [n:] { $value <- n };
+assign_value: [n: int] () => ... r: {
+	$value <- n;
+	$r <- ();
+};
 
-apply_123: [F: [int]()] () => { F 123; };
+apply_123: [F: [int] ()] () => ... r: {
+	F 123;
+	$r <- ();
+};
+
 apply_123 assign_value;
-\print (value);                  # 123
+$stdout <- (value);                  # 123
+
+# A contextual `...` lambda: the call's parameter type supplies the names.
+compose: [F: [arg_1: int] [arg_2: int] string] bool =>
+	... ((F 3 4) == to_string (add_int 3 4));
+
+$stdout <- (compose (... to_string (add_int arg_1 arg_2)));   # true

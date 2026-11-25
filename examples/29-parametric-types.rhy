@@ -1,0 +1,42 @@
+##########################################
+# STEP 0: constant types
+type_1: `type_1` => (ctor_1_A: `c1A`; ctor_1_B: `c1B`);
+$type_1 <- ctor_1_A; ## ILLEGAL - should not be able to assign state to types like that.
+type_1 <- (some expression); # ok, performs destructuring
+ctor_1_A <- (some expression); # ok, performs destructuring
+
+func_1: [x: type_1] int => ... 123;
+func_1 { }; # ILLEGAL - x not bound
+
+##########################################
+# STEP 1: nullable types
+nullable_type_1: type_1 => ctor_1_A;
+
+func_nullable_1: [x: nullable_type_1] int => ... 123;
+func_nullable_1 { }; # OK, because x becomes ctor_1_A
+
+# in other words, definition follows the rule
+
+<identifier>: type => default_value;
+
+# but value can be changed with binding (because this is not type)
+
+$nullable_type_1 <- ctor_1_B; # changes the bound value, but default value stays intact
+
+
+##########################################
+# STEP 2: any type (=> ?) and type matching with ? are getting deprecated
+
+# to_string: [=> ?] string; # DEPRECATED
+to_string: [T: => x:] string; # NEW SYNTAX - matches type and value
+
+# BTW - defines type because it is at the scope level i.e. at the { } level
+point: [T: =>] `point-of-\(T)`; # matches type only because it is left of "=>"
+
+# another example - we can bind type and value
+func_2: [T: => X: nullable_array [elem:]] int;
+# func_2: [T: array [elem_2:] => X: nullable_array [elem:]] int; # full version - unnecessary, and elem_2 == elem
+
+
+
+

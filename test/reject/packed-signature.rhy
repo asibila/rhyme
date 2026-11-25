@@ -1,0 +1,2 @@
+# Must fail: `name: => T;` is gone; `=> ?` is the one dynamic declaration.
+x: => int;

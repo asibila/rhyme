@@ -4,7 +4,7 @@ A language design in progress, with a working **parser** and a **dynamic
 evaluator** in plain Node.js. No dependencies.
 
 `SPEC.md` holds the design: settled rules (§12), open questions (§15), and
-syntax v2 (§17).
+current syntax v3 (§18); §17 keeps v2 for history.
 
 ## Run
 
@@ -15,9 +15,17 @@ node bin/rhyme.mjs --run examples/01-types-fgh.rhy
 ```
 
 ```
-int
-two
-one
+"int"
+"two"
+"one"
+```
+
+Outputs are rendered in display form when the program finishes, so strings keep
+their quotes. A shebang can add file sinks:
+
+```
+#!/bin/rhyme --output sum:out/sum.txt
+$sum <- add_int 1 2;
 ```
 
 Parse and dump its syntax tree:
@@ -35,7 +43,7 @@ node bin/rhyme.mjs --tokens examples/01-types-fgh.rhy
 Run the test suites:
 
 ```
-node test/run.mjs      # every example parses (38 cases)
+node test/run.mjs      # every example parses (44 cases)
 node test/eval.mjs     # every runnable example produces the expected output (28 cases)
 ```
 
@@ -63,29 +71,34 @@ test/eval.mjs        execution checks
 ## What runs today
 
 The evaluator is dynamic — types are values, but there is **no static checker**
-yet. It implements syntax v2 (§17):
+yet. It implements syntax v3 (§18):
 
 - values, mutable environments, top-to-bottom initialisation;
-- modules as statement lists with an implicit `self`;
-- bodies with parameters in scope by name and a pre-bound `self`
-  (`\self (name)` renames it; the result is its final value);
+- modules as bare statement lists: no `self`, results go to output sinks
+  (`$stdout` and shebang `--output name:path`), rendered at the end;
+- bodies `... expr` and `... r: { … }` (the named result starts from the declared
+  type); a contextual `...` lambda is legal as a direct call argument;
 - tables: positional keys and `${…}` groups (partial groups match by parameter
-  name), highest specificity wins, the body is the fallback;
+  name), highest specificity wins, the body is the fallback; a clause `...` body
+  sees only the parameters the clause did not match;
+- `$f <- g` makes `g` a function's fallback;
 - patterns: literals, constructors, binders, type slots, packed `(T => v)`;
 - record types and construction (`counter { $id <- 1 }`), methods as fields,
   per-instance state, visibility from the display template;
-- application: positional, partial, and named `{ $p <- v }` braces;
-- display: templates with holes and backslash escapes, the `\print` directive
-  and `to_string`;
+- application: positional, partial, and named `{ $p <- v }` braces, with
+  call-site deduction of omitted type parameters;
+- display: templates with holes and backslash escapes, `to_string`; strings are
+  quoted at the boundary;
 - operators: `! && || == != < <= > >=` (no arithmetic operators);
-- arithmetic builtins `add_int` / `add`, curried: `add_int 1` is a function.
+- arithmetic builtins `add_int` / `add`, curried: `add_int 1` is a function;
+  `print_int` / `print_float` / `print_bool` return strings.
 
 Examples that run: 01–28. `22-system` declares stubs and prints nothing; `17`
 and `18` are expected to fail at run time (a declared-but-unassigned `F`, and `H`
 with keys but no body).
 
-Not implemented: the static checker. Removed v1 forms are parse errors, kept as
-`test/reject/` cases.
+Not implemented: the static checker. Removed v1/v2 forms are parse errors, kept
+as `test/reject/` cases.
 
 ## Comments
 

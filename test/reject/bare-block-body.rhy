@@ -1,0 +1,4 @@
+# Must fail: a bare `{ }` body has no head. Name the result: `... r: { }`.
+f: [a: int] int => {
+	$r <- 1;
+};

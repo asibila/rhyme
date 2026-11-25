@@ -1,5 +1,5 @@
-// Rhyme2 — evaluator on top of the parser.
-// Dynamic: types are values, but there is no static checker yet.
+// Rhyme2 — evaluator for syntax v3.
+// No static checker; types are values, output happens at the end of a module.
 
 import { parse } from "./rhyme.mjs";
 
@@ -25,11 +25,10 @@ const vTuple = (items, names = null) => ({ k: "tuple", items, names });
 const vPacked = (type, value) => ({ k: "packed", type, value });
 const vType = (name, args, def) => ({ k: "type", name, args, def, builtin: false });
 const vRecord = (o) => ({ k: "record", ...o });
-
 const builtin = (name, arity, apply, params = null) => ({ k: "builtin", name, arity, apply, params });
 
 class Cell {
-  constructor(sig = null) { this.value = undefined; this.set = false; this.sig = sig; }
+  constructor(sig = null) { this.value = undefined; this.set = false; this.sig = sig; this.output = null; }
 }
 
 class Env {
@@ -52,9 +51,11 @@ class Env {
   }
   assign(name, value) {
     const c = this.find(name);
-    if (!c) fail(`'${name}' is not declared (declare it with ${name}: ... first)`);
+    if (!c) fail(`'${name}' is not declared`);
     c.value = value;
     c.set = true;
+    if (c.output && c.log) c.log.push(value);
+    return c;
   }
   sigOf(name) { const c = this.find(name); return c ? c.sig : null; }
 }
@@ -72,13 +73,7 @@ function typeOf(v) {
     case "fn": case "builtin": return T_FN;
     case "partial": {
       const t = v.target && v.target.type;
-      if (t) {
-        return {
-          k: "type", name: "->",
-          params: t.params.slice(v.args.length),
-          result: t.result,
-        };
-      }
+      if (t) return { k: "type", name: "->", params: t.params.slice(v.args.length), result: t.result };
       return T_FN;
     }
     default: return T_KIND;
@@ -95,37 +90,58 @@ function isTypeParamType(t) {
   if (!t) return false;
   if (t.k === "kType") return true;
   if (t.k === "fnType") {
-    return t.params.every((p) => p.k === "kType") && t.result.k === "kType";
+    return t.params.every((p) => (p.k === "namedType" ? p.type.k === "kType" : p.k === "kType"))
+      && t.result.k === "kType";
   }
   return false;
 }
 
-const isUnitType = (t) => t && t.k === "type" && t.name === "()";
+// `#!/bin/rhyme --output name:path ...`
+export function parseShebang(source) {
+  if (source.charCodeAt(0) === 0xfeff) source = source.slice(1);
+  const first = source.split(/\r?\n/, 1)[0] || "";
+  const outputs = [];
+  if (!first.startsWith("#!")) return { outputs };
+  const parts = first.slice(2).trim().split(/\s+/).slice(1);
+  for (let i = 0; i < parts.length; i++) {
+    let spec = null;
+    if (parts[i] === "--output") spec = parts[++i];
+    else if (parts[i].startsWith("--output=")) spec = parts[i].slice("--output=".length);
+    if (!spec) continue;
+    const c = spec.indexOf(":");
+    if (c <= 0) fail(`bad --output: ${spec}`);
+    outputs.push({ name: spec.slice(0, c), path: spec.slice(c + 1) });
+  }
+  return { outputs };
+}
 
 export function run(source, opts = {}) {
+  const { outputs } = parseShebang(source);
   const tree = parse(source);
-  const ev = new Evaluator(opts);
+  const ev = new Evaluator(outputs);
   try {
-    const value = ev.runModule(tree);
-    return { value, stdout: ev.out.join(""), display: ev.display(value), ev };
+    ev.runModule(tree);
+    return ev.finish();
   } catch (e) {
-    e.stdout = ev.out.join("");
+    const r = ev.renderOutputs();
+    e.stdout = r.stdout;
+    e.writes = r.writes;
     throw e;
   }
 }
 
 class Evaluator {
-  constructor(opts = {}) {
-    this.out = [];
-    this.typeDefs = new Map();     // name -> display/template info for builtin overrides
-    this.boolDisplay = null;       // { types: ..., ctors: Map(value -> template) }
-    this.depth = 0;
+  constructor(outputs = []) {
+    this.sinks = [];
+    this.typeDefs = new Map();
+    this.boolDisplay = null;
+    this.outputSpecs = outputs;
   }
 
   // ---- display --------------------------------------------------------
 
   text(v) {
-    if (v.k === "str") return v.v;             // print writes bare string contents
+    if (v.k === "str") return v.v;
     return this.display(v);
   }
 
@@ -136,7 +152,7 @@ class Evaluator {
       case "bool": return this.displayBool(v.v);
       case "unit": return "()";
       case "type": return this.displayType(v);
-      case "fn": case "builtin": case "partial": return "<fn>";
+      case "fn": case "builtin": case "partial": case "table": return "<fn>";
       case "packed": return this.display(v.value);
       case "tuple": return "(" + v.items.map((x) => this.display(x)).join(", ") + ")";
       case "record": return this.displayRecord(v);
@@ -176,7 +192,6 @@ class Evaluator {
     return this.render(r.template, lookup);
   }
 
-  // Render a display template, honouring \(hole) and backslash escapes.
   render(raw, lookup) {
     let out = "";
     for (let i = 0; i < raw.length; i++) {
@@ -191,8 +206,7 @@ class Evaluator {
           else if (raw[j] === ")" && --depth === 0) break;
         }
         const inner = raw.slice(i + 2, j).trim();
-        const name = inner.split(":")[0].trim();
-        out += lookup(name);
+        out += lookup(inner.split(":")[0].trim());
         i = j;
         continue;
       }
@@ -209,17 +223,35 @@ class Evaluator {
   runModule(tree) {
     const root = this.installBuiltins(new Env());
     const env = new Env(root);
-    const selfCell = env.declare("self");
-    let stmts = tree.body;
-    if (stmts[0] && stmts[0].k === "directive" && stmts[0].what === "self") {
-      const arg = stmts[0].arg;
-      const name = arg && arg.k === "name" ? arg.v : "self";
-      env.vars.delete("self");
-      env.vars.set(name, selfCell);
-      stmts = stmts.slice(1);
+    this.declareOutput("stdout", null, env);
+    for (const o of this.outputSpecs) this.declareOutput(o.name, o.path, env);
+    for (const s of tree.body) this.evalStmt(s, env);
+  }
+
+  declareOutput(name, path, env) {
+    if (env.vars.has(name)) return;
+    const cell = env.declare(name);
+    cell.output = { path };
+    cell.log = [];
+    this.sinks.push({ name, cell });
+  }
+
+  finish() {
+    const { stdout, writes } = this.renderOutputs();
+    return { value: UNIT, stdout, writes };
+  }
+
+  renderOutputs() {
+    const stdout = [];
+    const writes = [];
+    for (const { cell } of this.sinks) {
+      for (const value of cell.log) {
+        const line = this.display(value) + "\n";
+        if (cell.output.path == null) stdout.push(line);
+        else writes.push({ path: cell.output.path, text: line });
+      }
     }
-    this.evalStmts(stmts, env);
-    return selfCell.set ? selfCell.value : UNIT;
+    return { stdout: stdout.join(""), writes };
   }
 
   installBuiltins(root) {
@@ -237,11 +269,7 @@ class Evaluator {
     put("true", vBool(true));
     put("false", vBool(false));
     put("to_string", builtin("to_string", 1, (args) => vStr(this.text(args[0])), ["x"]));
-    const printer = (name) => builtin(name, 1, (args) => {
-      const s = this.text(args[0]);
-      this.out.push(s + "\n");
-      return vStr(s);
-    }, ["x"]);
+    const printer = (name) => builtin(name, 1, (args) => vStr(this.text(args[0])), ["x"]);
     put("print_int", printer("print_int"));
     put("print_float", printer("print_float"));
     put("print_bool", printer("print_bool"));
@@ -261,31 +289,6 @@ class Evaluator {
     return root;
   }
 
-  evalModuleBlock(node, env) {
-    const e = new Env(env);
-    this.declareShape(node.shape, e);
-    // The paren head declares names in scope. The module's value is what its
-    // body evaluates to (see O32: input vs result declaration is still open).
-    return this.evalStmts(node.body.stmts, e);
-  }
-
-  declareShape(shape, env) {
-    for (const f of shape.fields) env.declare(f.name, { type: f.type });
-  }
-
-  shapeValue(shape, env) {
-    const fields = shape.fields;
-    if (fields.length === 0) return UNIT;
-    if (fields.length === 1) return env.get(fields[0].name);
-    return vTuple(fields.map((f) => env.get(f.name)), fields.map((f) => f.name));
-  }
-
-  evalStmts(stmts, env) {
-    let last = UNIT;
-    for (const s of stmts) last = this.evalStmt(s, env);
-    return last;
-  }
-
   // ---- statements -----------------------------------------------------
 
   evalStmt(node, env) {
@@ -294,51 +297,47 @@ class Evaluator {
       case "def": return this.evalDef(node, env);
       case "defPath": return this.evalDefPath(node, env);
       case "expr": return this.evalExpr(node.e, env);
-      case "directive": return this.evalDirective(node, env);
       default: fail(`cannot evaluate statement ${node.k}`);
     }
   }
 
-  evalDirective(node, env) {
-    if (node.what === "self") {
-      const name = node.arg && node.arg.k === "name" ? node.arg.v : null;
-      if (!name) fail("\\self expects a name");
-      const cell = env.vars.get("self");
-      if (cell) { env.vars.delete("self"); env.vars.set(name, cell); }
-      return UNIT;
-    }
-    if (node.what === "print") {
-      const v = node.arg ? this.evalExpr(node.arg, env) : vStr("");
-      this.out.push(this.text(v) + "\n");
-      return UNIT;
-    }
-    fail(`unknown directive \\${node.what}`);
-  }
-
   evalAscribe(node, env) {
+    if (node.dynamic) {
+      if (!env.find(node.name)) env.declare(node.name);
+      return UNIT;
+    }
     if (node.display !== undefined) {
       return node.ctors ? this.evalVariantType(node, env) : this.evalRecordType(node, env);
     }
 
-    const sig = { params: node.params, result: node.result, packed: !!node.packed };
+    const sig = { params: node.params, result: node.result, value: !!node.value };
     const existing = env.find(node.name);
     const cell = env.declare(node.name, sig);
-    // re-declaring a builtin (e.g. `add_int: [int] [int] int;`) keeps its value
     if (existing && existing.builtin && existing.set) { cell.value = existing.value; cell.set = true; }
 
-    if (node.body) {
-      const fn = this.makeFunction(node.name, null, node.body, env, sig);
-      const table = this.makeTable(node.name, fn, sig);
-      cell.value = table; cell.set = true;
-      return table;
+    if (!node.value && node.body) {
+      const v = this.evalNamedBody(node.name, node.params, node.body, env, sig);
+      cell.value = v; cell.set = true;
+      return v;
     }
     return UNIT;
   }
 
+  evalNamedBody(name, params, body, env, sig) {
+    if (body.k === "alias") {
+      const v = this.evalExpr(body.body, env);
+      if (params.length > 0) {
+        if (!this.isCallable(v)) fail(`'${name}' is a function; use '...' for a value body`);
+        return this.makeTable(name, v, sig);
+      }
+      return v;
+    }
+    const fn = this.makeFn(name, params, body, env, sig);
+    return this.makeTable(name, fn, sig);
+  }
+
   evalRecordType(node, env) {
-    const fields = node.params
-      .filter((p) => p && p.name)
-      .map((p) => ({ name: p.name, type: p.type }));
+    const fields = node.params.filter((p) => p && p.name).map((p) => ({ name: p.name, type: p.type }));
     const type = {
       k: "type", name: node.name, args: [], fields,
       display: node.display, holes: node.holes,
@@ -350,15 +349,9 @@ class Evaluator {
 
   evalVariantType(node, env) {
     const def = {
-      name: node.name,
-      params: node.params,
-      display: node.display,
-      holes: node.holes,
-      ctors: node.ctors,
-      user: true,
+      name: node.name, params: node.params, display: node.display,
+      holes: node.holes, ctors: node.ctors, user: true,
     };
-
-    // builtin display override (e.g. bool: ... => (false: `F`; true: `T`))
     if (["int", "float", "string", "bool", "void"].includes(node.name)) {
       this.typeDefs.set(node.name, def);
       if (node.name === "bool") {
@@ -371,13 +364,11 @@ class Evaluator {
       }
       return env.get(node.name);
     }
-
     const type = vType(node.name, [], def);
     def.type = type;
     type.ctors = [];
     const cell = env.declare(node.name);
     cell.value = type; cell.set = true;
-
     for (const c of node.ctors) {
       const ctor = this.makeCtor(def, c, env);
       const cc = env.declare(c.name);
@@ -389,30 +380,24 @@ class Evaluator {
   }
 
   makeCtor(def, ctorNode, closureEnv) {
-    const arity = ctorNode.params.length;
     return {
       k: "fn",
       name: ctorNode.name,
-      arity,
-      autoCall: arity === 0,
+      arity: ctorNode.params.length,
+      autoCall: ctorNode.params.length === 0,
       ctorOf: def.name,
       paramNames: ctorNode.params.map((p) => (p ? p.name : null)),
+      params: ctorNode.params,
+      sig: { params: ctorNode.params, result: null },
       template: ctorNode.display,
       holes: ctorNode.holes || [],
       call(args) {
         const fields = new Map();
         ctorNode.params.forEach((p, i) => {
-          if (p && p.name) {
-            const c = new Cell();
-            c.value = args[i]; c.set = true;
-            fields.set(p.name, c);
-          }
+          if (p && p.name) { const c = new Cell(); c.value = args[i]; c.set = true; fields.set(p.name, c); }
         });
         return vRecord({
-          type: def.type,
-          ctor: ctorNode.name,
-          args,
-          fields,
+          type: def.type, ctor: ctorNode.name, args, fields,
           public: new Set((ctorNode.holes || []).map((h) => h.name)),
           template: ctorNode.display,
         });
@@ -420,40 +405,9 @@ class Evaluator {
     };
   }
 
-  evalDisplayed(node, env) {                 // name: params `template` { body }
-    const arity = node.params.length;
-    const self = this;
-    const type = mkType(node.name, { builtin: true, anonymous: true });
-    const fn = {
-      k: "fn",
-      name: node.name,
-      arity,
-      autoCall: arity === 0,
-      call(args) {
-        const e = new Env(env);
-        node.params.forEach((p, i) => {
-          if (p.name) { const c = e.declare(p.name); c.value = args[i]; c.set = true; }
-        });
-        for (const h of node.holes || []) if (h.type && !e.has(h.name)) e.declare(h.name);
-        self.evalStmts(node.body.stmts, e);
-        const fields = new Map(e.vars);
-        return vRecord({
-          type,
-          ctor: node.name,
-          args,
-          fields,
-          public: new Set((node.holes || []).map((h) => h.name)),
-          template: node.display,
-        });
-      },
-    };
-    const cell = env.declare(node.name);
-    cell.value = fn; cell.set = true;
-    return fn;
-  }
+  // ---- definitions ----------------------------------------------------
 
   evalDef(node, env) {
-    // headless: cast ($[T] <- e) or pattern binding ($(p) <- e)
     if (!node.name) {
       if (node.keys.length === 1 && node.keys[0].k === "keySlot") {
         const v = this.evalRhsValue(node.rhs, env);
@@ -475,25 +429,47 @@ class Evaluator {
 
     if (node.keys.length > 0) return this.addClause(node, env);
 
-    // $name <- rhs
-    const sig = env.sigOf(node.name) || null;
+    const sig = env.sigOf(node.name);
     const rhs = node.rhs;
-    const isFn = rhs.binders.length > 0 || rhs.body.k === "block";
-    if (!isFn) {
-      const v = this.evalExpr(rhs.body, env);
-      env.assign(node.name, v);
-      return v;
+
+    if (rhs.k === "splat") {
+      if (!sig || !sig.params || sig.params.length === 0) {
+        fail(`'...' needs parameters; '${node.name}' is a value`);
+      }
+      const fn = this.makeFn(node.name, sig.params, rhs, env, sig);
+      const cell = env.find(node.name);
+      let table = cell.set && cell.value && cell.value.k === "table" ? cell.value : null;
+      if (!table) {
+        table = this.makeTable(node.name, fn, sig);
+        env.assign(node.name, table);
+      } else {
+        table.fallback = fn;
+      }
+      return table;
     }
 
-    const binders = rhs.binders.length > 0 ? rhs.binders : null;
-    const fn = this.makeFunction(node.name, binders, rhs.body, env, sig);
-    const table = this.makeTable(node.name, fn, sig);
-    env.assign(node.name, table);
-    return table;
+    // alias / value
+    const v = this.evalExpr(rhs.body, env);
+    if (sig && sig.params && sig.params.length > 0) {
+      if (!this.isCallable(v)) fail(`'${node.name}' is a function; use '...' for a value body`);
+      const cell = env.find(node.name);
+      let table = cell.set && cell.value && cell.value.k === "table" ? cell.value : null;
+      if (!table) {
+        table = this.makeTable(node.name, null, sig);
+        env.assign(node.name, table);
+      }
+      table.fallback = v;
+      return table;
+    }
+    env.assign(node.name, v);
+    return v;
   }
 
-  makeFunction(name, binders, body, closure, sig) {
-    const params = binders || (sig ? sig.params : []);
+  isCallable(v) {
+    return v.k === "fn" || v.k === "table" || v.k === "builtin" || v.k === "partial";
+  }
+
+  makeFn(name, params, splat, closure, sig) {
     const arity = params.length;
     const self = this;
     return {
@@ -501,70 +477,44 @@ class Evaluator {
       name,
       arity,
       paramNames: params.map((p) => (p ? p.name : null)),
+      params,
+      sig,
       call(args) {
         const env = new Env(closure);
         params.forEach((p, i) => {
           if (p && p.name) { const c = env.declare(p.name); c.value = args[i]; c.set = true; }
         });
-        let result;
-        if (body.k === "block") result = self.evalBody(body, env, sig);
-        else result = self.evalExpr(body, env);
-        if (sig && sig.packed) result = vPacked(typeOf(result), result);
-        return result;
+        return self.evalSplat(splat, env, sig, null);
       },
     };
   }
 
-  // A body brace: bind `self`, honour a leading \self directive, return its value.
-  evalBody(block, env, sig) {
-    const resultNode = sig ? sig.result : null;
-    const cell = this.bindSelf(env, resultNode);
-    let stmts = block.stmts;
-    let selfName = "self";
-    if (stmts[0] && stmts[0].k === "directive" && stmts[0].what === "self") {
-      const arg = stmts[0].arg;
-      if (arg && arg.k === "name") selfName = arg.v;
-      env.vars.delete("self");
-      env.vars.set(selfName, cell);
-      stmts = stmts.slice(1);
+  evalSplat(splat, env, sig, matched) {
+    if (!splat.result) return this.evalExpr(splat.body, env);
+    const e = new Env(env);
+    const cell = e.declare(splat.result);
+    if (sig && sig.result) {
+      const t = this.evalTypeNode(sig.result, env);
+      if (t.k === "type" && t.fields) { cell.value = this.freshRecord(t); cell.set = true; }
+      else if (t.k === "type" && t.singleCtor) { cell.value = this.freshRecordFromCtor(t, t.singleCtor); cell.set = true; }
+      else if (t.k === "type" && t.name === "()") { cell.value = UNIT; cell.set = true; }
     }
-    this.evalStmts(stmts, env);
-    if (cell.set) return cell.value;
-    if (!resultNode || resultNode.k === "unit" || resultNode.k === "infer") return UNIT;
-    fail(`'${selfName}' has not been assigned`);
+    this.evalStmts(splat.body.stmts, e);
+    if (!cell.set) fail(`'${splat.result}' has not been assigned`);
+    return cell.value;
   }
 
-  bindSelf(env, resultNode) {
-    const cell = env.declare("self");
-    if (!resultNode) return cell;
-
-    if (resultNode.k === "unit" || resultNode.k === "infer") {
-      cell.value = UNIT; cell.set = true;
-      return cell;
-    }
-
-    const t = this.evalTypeNode(resultNode, env);
-    if (t.k === "type" && t.fields) {
-      cell.value = this.freshRecord(t);
-      cell.set = true;
-      return cell;
-    }
-    if (t.k === "type" && t.singleCtor) {
-      cell.value = this.freshRecordFromCtor(t, t.singleCtor);
-      cell.set = true;
-      return cell;
-    }
-    return cell;              // scalar: unset until assigned
+  evalStmts(stmts, env) {
+    let last = UNIT;
+    for (const s of stmts) last = this.evalStmt(s, env);
+    return last;
   }
 
   freshRecord(type) {
     const fields = new Map();
     for (const f of type.fields) fields.set(f.name, new Cell());
     return vRecord({
-      type,
-      ctor: type.name,
-      args: [],
-      fields,
+      type, ctor: type.name, args: [], fields,
       public: new Set((type.holes || []).map((h) => h.name)),
       template: type.display,
     });
@@ -574,10 +524,7 @@ class Evaluator {
     const fields = new Map();
     for (const n of ctor.paramNames || []) if (n) fields.set(n, new Cell());
     return vRecord({
-      type,
-      ctor: ctor.name,
-      args: [],
-      fields,
+      type, ctor: ctor.name, args: [], fields,
       public: new Set(ctor.holes || []),
       template: ctor.template,
     });
@@ -599,31 +546,23 @@ class Evaluator {
   addClause(node, env) {
     const cell = env.find(node.name);
     if (!cell) fail(`'${node.name}' is not declared`);
-    let table = cell.set ? cell.value : null;
+    let table = cell.set && cell.value && cell.value.k === "table" ? cell.value : null;
     if (!table) {
-      const sig = cell.sig;
-      const fn = { k: "fn", name: node.name, arity: sig ? sig.params.length : node.keys.length, call() { fail(`'${node.name}' has no body`); } };
-      table = this.makeTable(node.name, fn, sig);
+      table = this.makeTable(node.name, null, cell.sig);
       cell.value = table; cell.set = true;
     }
-    if (table.k !== "table") fail(`'${node.name}' cannot take keys`);
     table.clauses.push({ keys: node.keys, rhs: node.rhs, env });
     return table;
   }
 
   evalDefPath(node, env) {
     const target = node.target;
+    const chain = [];
+    for (let n = target; n.k === "proj"; n = n.base) chain.unshift(n.field);
     let base = target;
     while (base.k === "proj") base = base.base;
     if (base.k !== "name") fail("assignment target must be a field path");
-    const obj = env.get(base.v);
-    if (obj.k !== "record") fail("field assignment on a non-record");
-    let rec = obj;
-    for (let n = target; n.k === "proj" && n !== target.base; n = n.base) { /* noop */ }
-    // walk the projections except the last
-    const chain = [];
-    for (let n = target; n.k === "proj"; n = n.base) chain.unshift(n.field);
-    let cur = obj;
+    let cur = env.get(base.v);
     for (let i = 0; i < chain.length - 1; i++) {
       cur = this.getField(cur, chain[i]);
       if (cur.k !== "record") fail("nested assignment on a non-record");
@@ -633,19 +572,14 @@ class Evaluator {
     return value;
   }
 
-  // ---- right-hand sides ----------------------------------------------
-
   evalRhsValue(rhs, env) {
-    if (rhs.binders.length) fail("expected a value, got a function");
+    if (rhs.k !== "alias") fail("expected a value");
     return this.evalExpr(rhs.body, env);
   }
 
-  // A value or a lambda, for field assignment and similar.
   evalRhsAsValue(rhs, env) {
-    const isFn = rhs.binders.length > 0 || rhs.body.k === "block";
-    if (!isFn) return this.evalExpr(rhs.body, env);
-    const binders = rhs.binders.length > 0 ? rhs.binders : null;
-    return this.makeFunction(null, binders, rhs.body, env, null);
+    if (rhs.k === "splat") return this.evalExpr(rhs.body, env);
+    return this.evalExpr(rhs.body, env);
   }
 
   // ---- expressions ----------------------------------------------------
@@ -662,7 +596,11 @@ class Evaluator {
       }
       case "app": {
         const callee = this.evalExpr(node.head, env);
-        const args = node.args.map((a) => this.evalExpr(a, env));
+        const specs = this.paramSpecs(callee);
+        const args = node.args.map((a, i) => {
+          if (a.k === "splatExpr") return this.makeContextualFn(a, specs ? specs[i] : null, env);
+          return this.evalExpr(a, env);
+        });
         return this.applyValue(callee, args, env, node.head);
       }
       case "proj": {
@@ -675,6 +613,7 @@ class Evaluator {
       case "un": return this.evalUn(node, env);
       case "define": return this.evalDef(node, env);
       case "namedApp": return this.evalNamedApp(node, env);
+      case "splatExpr": fail("'...' needs an expected type (pass it as a call argument)");
       default: fail(`cannot evaluate expression ${node.k}`);
     }
   }
@@ -768,7 +707,8 @@ class Evaluator {
       if (rt.k !== "type" || !rt.params || !rt.result) return false;
       if (rt.params.length !== ast.params.length) return false;
       for (let i = 0; i < ast.params.length; i++) {
-        if (!this.solveType(ast.params[i], rt.params[i], subst, typeParams)) return false;
+        const p = ast.params[i];
+        if (!this.solveType(p.k === "namedType" ? p.type : p, rt.params[i], subst, typeParams)) return false;
       }
       return this.solveType(ast.result, rt.result, subst, typeParams);
     }
@@ -788,8 +728,40 @@ class Evaluator {
     return null;
   }
 
+  paramSpecs(callee) {
+    if (callee.k === "table" || callee.k === "fn") return callee.sig ? callee.sig.params : null;
+    if (callee.k === "partial") return null;
+    return null;
+  }
+
+  makeContextualFn(splat, spec, closure) {
+    let t = spec;
+    if (t && t.k === "param") t = t.type;
+    if (t && t.k === "namedType") t = t.type;
+    let params = [];
+    if (t && t.k === "fnType") {
+      params = t.params.map((p) => (p.k === "namedType" ? { name: p.name } : { name: null }));
+    }
+    const arity = params.length;
+    const self = this;
+    return {
+      k: "fn",
+      name: null,
+      arity,
+      paramNames: params.map((p) => p.name),
+      params,
+      sig: null,
+      call(args) {
+        const env = new Env(closure);
+        params.forEach((p, i) => {
+          if (p.name) { const c = env.declare(p.name); c.value = args[i]; c.set = true; }
+        });
+        return self.evalExpr(splat.body, env);
+      },
+    };
+  }
+
   applyValue(callee, args, env, calleeNode) {
-    // partial application / oversaturation
     if (callee.k === "partial") {
       return this.applyValue(callee.target, [...callee.args, ...args], env, callee.node || calleeNode);
     }
@@ -812,11 +784,39 @@ class Evaluator {
       if (args.length !== callee.arity) fail(`'${callee.name || "function"}' expects ${callee.arity} argument(s), got ${args.length}`);
       return callee.call(args, env);
     }
-    if (callee.k === "type") {
-      const prepared = this.prepareArgs(env.sigOf(calleeNode && calleeNode.v), args);
-      return this.applyType(callee, prepared, env);
-    }
+    if (callee.k === "type") return this.applyType(callee, args, env);
     fail(`not callable: ${this.display(callee)}`);
+  }
+
+  callTable(table, args, env) {
+    const prepared = this.prepareArgs(table.sig, args);
+    let best = null;
+    for (const cl of table.clauses) {
+      const m = this.matchClause(cl, prepared, table);
+      if (!m.ok) continue;
+      if (!best || m.score > best.score) best = { cl, binds: m.binds, score: m.score, matched: m.matched };
+      else if (m.score === best.score) fail(`ambiguous keys for '${table.name}'`);
+    }
+    if (best) {
+      const e = new Env(best.cl.env);
+      for (const [n, v] of best.binds) { const c = e.declare(n); c.value = v; c.set = true; }
+      const rhs = best.cl.rhs;
+      if (rhs.k === "alias") return this.evalExpr(rhs.body, e);
+      // splat: bind the unmatched named parameters
+      if (table.sig) {
+        table.sig.params.forEach((p, i) => {
+          if (p && p.name && !best.matched.has(i) && !e.has(p.name)) {
+            const c = e.declare(p.name); c.value = prepared[i]; c.set = true;
+          }
+        });
+      }
+      return this.evalSplat(rhs, e, table.sig, best.matched);
+    }
+    if (table.fallback) {
+      if (this.isCallable(table.fallback)) return this.applyValue(table.fallback, prepared, env);
+      fail(`'${table.name}' cannot be called`);
+    }
+    fail(`no key matches the call to '${table.name}' and it has no body`);
   }
 
   prepareArgs(sig, args) {
@@ -829,13 +829,9 @@ class Evaluator {
     });
   }
 
-  // Match one clause against the prepared argument list.
-  // Positional clauses need one key per argument. A clause containing
-  // `$name <- pattern` group entries is matched by parameter name instead:
-  // plain keys fill parameters in order, named keys by name, and unmentioned
-  // parameters are unconstrained (but still bound for the body).
   matchClause(cl, args, table) {
     const binds = new Map();
+    const matched = new Set();
     let score = 0;
     const named = cl.keys.some((k) => k.k === "keyBound");
 
@@ -845,23 +841,25 @@ class Evaluator {
         const s = this.matchKey(cl.keys[i], args[i], binds, cl.env);
         if (s < 0) return { ok: false };
         score += s;
+        matched.add(i);
       }
-      return { ok: true, score, binds };
+      return { ok: true, score, binds, matched };
     }
 
     for (let i = 0; i < table.paramNames.length && i < args.length; i++) {
       const n = table.paramNames[i];
       if (n) binds.set(n, args[i]);
     }
-
     let pos = 0;
     for (const key of cl.keys) {
       let idx;
       if (key.k === "keyBound") {
         idx = table.paramNames.indexOf(key.name);
         if (idx < 0) return { ok: false };
+        matched.add(idx);
       } else {
         idx = pos++;
+        matched.add(idx);
       }
       if (idx >= args.length) return { ok: false };
       const pat = key.k === "keyBound" ? key.key : key;
@@ -869,30 +867,7 @@ class Evaluator {
       if (s < 0) return { ok: false };
       score += s;
     }
-    return { ok: true, score, binds };
-  }
-
-  callTable(table, args, env) {
-    const prepared = this.prepareArgs(table.sig, args);
-    let best = null;
-    for (const cl of table.clauses) {
-      const m = this.matchClause(cl, prepared, table);
-      if (!m.ok) continue;
-      if (!best || m.score > best.score) best = { cl, binds: m.binds, score: m.score };
-      else if (m.score === best.score) fail(`ambiguous keys for '${table.name}'`);
-    }
-    if (best) {
-      const e = new Env(best.cl.env);
-      for (const [n, v] of best.binds) { const c = e.declare(n); c.value = v; c.set = true; }
-      const rhs = best.cl.rhs;
-      let result;
-      if (rhs.body.k === "block") result = this.evalBody(rhs.body, e, table.sig);
-      else result = this.evalExpr(rhs.body, e);
-      if (table.sig && table.sig.packed) result = vPacked(typeOf(result), result);
-      return result;
-    }
-    if (table.fallback) return table.fallback.call(prepared, env);
-    fail(`no key matches the call to '${table.name}' and it has no body`);
+    return { ok: true, score, binds, matched };
   }
 
   applyType(type, args, env) {
@@ -924,10 +899,7 @@ class Evaluator {
       case "str": return value.k === "str" && value.v === node.v ? 3 : -1;
       case "lit": return value.k === "str" && value.v === node.v ? 3 : -1;
       case "wild": return 0;
-      case "binder": {
-        if (node.name) binds.set(node.name, value);
-        return 1;
-      }
+      case "binder": if (node.name) binds.set(node.name, value); return 1;
       case "hole": {
         const t = node.type;
         if (node.name) { binds.set(node.name, value); return 1; }
@@ -1015,7 +987,15 @@ class Evaluator {
       case "kType": return T_KIND;
       case "unit": return T_UNIT;
       case "product": return mkType("(,)", { args: node.items.map((x) => this.evalTypeNode(x, env)) });
-      case "fnType": return mkType("->", { args: [...node.params.map((p) => this.evalTypeNode(p, env)), this.evalTypeNode(node.result, env)] });
+      case "fnType": {
+        const params = [];
+        const paramNames = [];
+        for (const p of node.params) {
+          if (p.k === "namedType") { params.push(this.evalTypeNode(p.type, env)); paramNames.push(p.name); }
+          else { params.push(this.evalTypeNode(p, env)); paramNames.push(null); }
+        }
+        return mkType("->", { params, paramNames, result: this.evalTypeNode(node.result, env) });
+      }
       case "typeApp": {
         const head = this.evalTypeNode(node.head, env);
         const args = node.args.map((a) => {
@@ -1032,11 +1012,9 @@ class Evaluator {
     }
   }
 
-  cast(type, value) {
-    return value;
-  }
+  cast(type, value) { return value; }
 
-  // ---- records and fields --------------------------------------------
+  // ---- records --------------------------------------------------------
 
   getField(rec, name) {
     if (rec.k !== "record") fail(`cannot select .${name} on ${this.display(rec)}`);

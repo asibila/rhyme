@@ -1,7 +1,9 @@
-# Rhyme2 — working spec (v0.3)
+# Rhyme2 — working spec (v0.4)
 
 Status: reverse-engineered from examples. Marked **[?]** where inferred, not confirmed.
 Nothing here is normative yet; this exists so we can disagree with something concrete.
+
+Current surface syntax: **v3 (§18)**. §17 records v2, kept for history.
 
 ## 1. Declarations
 
@@ -916,14 +918,21 @@ are evaluated, is the order of evaluation during checking observable?
 
 ## 16. Evaluator (first cut)
 
-`src/eval.mjs` executes syntax v2 (§17) dynamically. There is no static checker.
+`src/eval.mjs` executes syntax v3 (§18) dynamically. There is no static checker.
 
 * Values, mutable environments, top-to-bottom initialisation.
-* Modules are statement lists with an implicit `self`; the module's value is
-  `self` at the end (unset `self` means no output).
-* Bodies: parameters in scope by name; `self` pre-bound to a fresh record (record
-  result), `()` (unit/deduced), or unset (scalar); `\self (name)` renames it; the
-  result is the final `self`.
+* Modules are bare statement lists with **no `self`**. Result output comes from
+  output sinks (`$stdout` and the shebang's `--output name:path`), rendered when
+  the module finishes.
+* Outputs are a log: every assignment to an output name appends a value; all are
+  rendered in display form at the end (strings quoted). An unassigned output
+  writes nothing.
+* Bodies: `... expr` returns the expression; `... r: { … }` names the result and
+  returns it. The named result is pre-initialised from the declared result type
+  (fresh record, single-constructor value, or unit).
+* A contextual `...` lambda is the only lambda-in-expression form, and only as a
+  direct call argument: the callee's declared parameter type supplies the
+  parameter names (`G (... to_string …)`).
 * Application: positional, partial, and named `{ $p <- v }` braces. A brace fires
   at `}` and may follow a partial. Omitted **type** parameters are deduced by
   unifying the supplied arguments’ runtime types; unsupplied value parameters are
@@ -932,24 +941,25 @@ are evaluated, is the order of evaluation during checking observable?
   variant’s single constructor.
 * Types: record types (`counter: [id:int] [inc:[]] `\(id)\(inc)``) and variants
   (`point: `p` => ( ctor: [x:int] `d` )`).
-* Display: templates with holes and escapes; strings quoted at the boundary and
-  bare through the `\print` directive; functions `<fn>`; floats via JavaScript.
+* Display: templates with holes and escapes; strings quoted at the boundary;
+  functions and tables `<fn>`; floats via JavaScript.
 * `bool:` overrides the builtin boolean display (`F`/`T`).
 * `add_int` (`add`) is a builtin function, and calls are curried: `add_int 1` is
-  a function awaiting one more int.
+  a function awaiting one more int. `print_int`/`print_float`/`print_bool` return
+  strings (they do not write).
 * Equality: primitives by value, types structurally, records and functions by
   identity. Operators are builtin for int/float/string/bool; `&&`/`||`
   short-circuit.
 * Dispatch: positional keys and `${…}` groups; highest specificity wins, ties are
-  runtime errors, and the body is the fallback.
+  runtime errors, and the body is the fallback. A clause `...` body binds only the
+  parameters not constrained by that clause's keys.
 * Records are passed by reference; each `new_counter ()` is a fresh instance.
   The display template’s holes are the public fields; others are hidden.
 
 Not implemented: the static checker (arity, unification, overlap, unresolved
-holes) and call-site deduction for named braces. Removed forms are parse errors
-(`test/reject/`).
+holes). Removed forms are parse errors (`test/reject/`).
 
-## 17. Syntax v2
+## 17. Syntax v2 (superseded)
 
 Proposal locked. When it lands, every "removed" form is a parse error.
 
@@ -1077,7 +1087,7 @@ All but (4) are parser errors; (4) is accepted only as a packed signature.
 
 ### Implemented
 
-`src/` implements v2; `test/reject/` keeps one case per removed form.
+v2 is recorded here only for history; `src/` now implements v3 (§18). `test/reject/` keeps one case per removed form.
 
 ### Migration of the corpus
 
@@ -1099,3 +1109,114 @@ Both former open items are settled by the defaults above: `f: [a: int];`
 deduces the result, and modules have no inputs (example 14 declares and assigns
 `n` locally).
 
+## 18. Syntax v3 (current)
+
+v3 removes the v2 statement forms and makes the corpus depend only on the
+declaration and `<-` machinery. Everything below is implemented and covered by
+`examples/` and `test/reject/`.
+
+### Modules
+
+A module is a bare statement list. There is **no `self`**, and the module has no
+implicit result. Results are written to named **outputs**:
+
+```
+#!/bin/rhyme --output sum:out/sum.txt --output count:out/count.txt
+$stdout <- 123;
+$sum <- add_int 1 2;
+```
+
+* `stdout` is predefined; shebang `--output name:path` declares more (repeatable,
+  split at the first `:`).
+* Every write to an output appends to its log. When the module finishes, each
+  log is rendered in **display form** and written in order: stdout to the
+  terminal, a file sink to its path. Strings therefore keep their quotes.
+* An output never assigned writes nothing.
+* Outputs are ordinary readable names: `sum` can be read back in the module;
+  `$sum <- …` writes it.
+
+### Declarations
+
+```
+value: int;                             # declare a value, no parameters
+func: [];                               # one unit parameter, deduced result
+assign_value: [n: int] ();              # typed parameter, unit result
+auto_function: [n: ?] int;              # `?` is the type of types
+stdout: => ?;                           # the one dynamic declaration
+```
+
+* Every parameter specifies its type. `[m:]` is gone; `[]` is one unit parameter,
+  and arity 0 is written with no brackets at all (`get_point: point`).
+* A bare `name: T;` declares a value. A bracket list makes it a function, and
+  the optional result may be elided (deduced from the body).
+* `name: => ?;` declares a dynamic value (used for `stdout`); no other top-level
+  `=> T` ascription exists. (A parameter `[=> T]` is the separate unary-pair form.)
+
+### Bodies
+
+A body is one of two shapes, and a bare `{ }` is never one of them:
+
+```
+f: [n: int] int => ... n;               # expression body
+f: [n: int] int => ... r: {             # named-result body
+    $r <- n;
+};
+```
+
+* `... expr` returns `expr`; the declaration supplies the parameters.
+* `... r: { … }` names the result. `r` is pre-initialised from the declared
+  result type: a fresh record (fields unset), a single-constructor value, or
+  `()`. The body must assign it; the last value wins.
+* Inside a named-result body, `$name <- v` assigns the nearest binding, and
+  `expr.field <- v` mutates through a projection.
+* `$f <- g` where `f` is a declared function and `g` is callable makes `g` the
+  **fallback** for `f`; later `f $key <- …` clauses shadow it for matching keys,
+  and `g` itself is untouched. `$f <- ... body` is the ordinary fallback body.
+* A clause body `f $keys <- ... body` sees the parameters the clause did not
+  match, and nothing else.
+
+### Contextual `...` lambdas
+
+The only lambda form in expression position is `...`:
+
+```
+G: [F: [arg_1: int] [arg_2: int] string] bool => ... true;
+G (... to_string (add_int arg_1 arg_2));
+```
+
+* It is legal **only as a direct call argument**.
+* The expected type comes from the callee's declared parameter (a direct call
+  argument's type only; results never propagate).
+* The parameter names of that type are bound in the lambda's body; anonymous
+  parameters are silently unbound.
+
+### Tables and keys
+
+Unchanged from v2: keys are `$`-quoted (`$[int]`, `$(1)`), groups are
+`${ pattern <- name; }`, dispatch prefers specificity and reports ties, and the
+whole-object body is the fallback. Keys may use a bare binder in pattern space
+(`$[X:]`); declaration parameters may not.
+
+### Removed in v3
+
+| removed | replacement | reject case |
+| --- | --- | --- |
+| `\self (x);` | `... x: { … }` | `directive-self` |
+| `\print (e);` | `$stdout <- e;` | `directive-print` |
+| `=> { }` bare body | `... r: { }` | `bare-block-body` |
+| `$f <- [m:] body` | name parameters in the declaration, then `... body` | `body-binders` |
+| `f: [m:] T;` | `f: [m: ?] T;` | `untyped-param` |
+| `f: => [T] R;` packed | `f: [T] R;` | `packed-signature` |
+| `f: [a] R { … }` without `=>` | `f: [a: A] R => ... r: { }` | `no-arrow-body` |
+| `self` / `$self` | outputs (§18) | run-time: not declared |
+
+### Migration of the corpus
+
+All 28 examples are v3. The mechanical changes were: replace `\print (e)` with
+`$stdout <- (e)`; turn `$f <- [names] body` into `$f <- ... body` (parameters
+come from the declaration); turn `=> { … }` into `... r: { … $r <- … }`; replace
+`\self (inst)` / `$self` with a named result (`... inst: { … }`) and the declared
+result type; replace `[m:]`/`[n:]` declarations with typed named parameters; and
+rewrite packed signatures as ordinary function declarations. Examples 10–12 now
+use `$stdout` instead of `self`; 09/19/24 build methods from ordinary functions
+(partial application captures the instance) because bare block lambdas are gone.

@@ -9,29 +9,29 @@
 #   two
 #   one
 
-F: [?] string;
-$F <- [x:] "";
+F: [x: ?] string;
+$F <- ... "";
 F $[int] <- "int";
 F $[string] <- "string";
-\print (F int);                  # int
+$stdout <- (F int);                  # int
 
-G: [int] string;
-$G <- [x:] "";
+G: [x: int] string;
+$G <- ... "";
 G $(1) <- "one";
 G $(2) <- "two";
-\print (G 2);                    # two
+$stdout <- (G 2);                    # two
 
 H: [=> ?] string;               # a value together with its type
-$H <- [x:] "";
+$H <- ... "";
 H $(int => 1) <- "one";
-\print (H 1);                    # one
+$stdout <- (H 1);                    # one
 
 
 # matching multiple arguments
 
 multi: [A: ?] [B: int] [C: int] string;
 
-$multi <- [A:] [B:] [C:] "";
+$multi <- ... "";
 
 multi ${
 	$[int] <- A;

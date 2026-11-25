@@ -1,3 +1,2 @@
-# Must fail: a declaration body requires `=>`.
-
-f: [int] int { $self <- 1; };
+# Must fail: a declaration body requires `=> ...`.
+f: [a: int] int { $r <- 1; };

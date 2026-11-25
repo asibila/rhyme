@@ -16,7 +16,7 @@ $R <- new_rec;
 $R <- unshift_rec 123 R;
 $R <- unshift_rec 222 R;
 
-fmap: [C: [?]?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U) => { };
+fmap: [C: [?] ?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U);
 
 fmap $[rec] $[T:] $[U:] $(new_rec) $(func:) <- new_rec;
 fmap $[rec] $[T:] $[U:] $(unshift_rec $[X:] $[Y:]) $(func:) <-
@@ -28,4 +28,4 @@ $RR <- fmap {
 	$func <- add_int 1000;
 };
 
-\print (RR);            # 1222-1123-
+$stdout <- (RR);            # 1222-1123-
