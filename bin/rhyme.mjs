@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // rhyme2 — parse .rhy files and print what the grammar made of them.
 
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join, extname, relative } from "node:path";
+import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import { join, extname, relative, dirname } from "node:path";
 import { lex, parse, dump } from "../src/rhyme.mjs";
 import { run } from "../src/eval.mjs";
 
@@ -74,7 +74,10 @@ for (const f of files) {
     if (flags.has("--run")) {
       const { stdout, writes } = run(src, { file: name });
       if (stdout) process.stdout.write(stdout);
-      for (const w of writes) writeFileSync(w.path, w.text);
+      for (const w of writes) {
+        mkdirSync(dirname(w.path), { recursive: true });
+        writeFileSync(w.path, w.text);
+      }
       continue;
     }
     if (flags.has("--tokens")) {

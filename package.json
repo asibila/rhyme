@@ -1,6 +1,6 @@
 {
   "name": "rhyme2",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Rhyme2 — language design, parser and dynamic evaluator",

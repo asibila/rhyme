@@ -1,0 +1,4 @@
+# 34 — a named call must supply required parameters
+type_1: `type_1` => (ctor_1_A: `c1A`; ctor_1_B: `c1B`);
+func_1: [x: type_1] int => ... 123;
+func_1 { };            # ILLEGAL: x has no default

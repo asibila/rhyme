@@ -1,9 +1,9 @@
-# Rhyme2 — working spec (v0.4)
+# Rhyme2 — working spec (v0.5)
 
 Status: reverse-engineered from examples. Marked **[?]** where inferred, not confirmed.
 Nothing here is normative yet; this exists so we can disagree with something concrete.
 
-Current surface syntax: **v3 (§18)**. §17 records v2, kept for history.
+Current surface syntax: **v4 (§19)**. §17/§18 record v2/v3 for history.
 
 ## 1. Declarations
 
@@ -916,48 +916,36 @@ name, hidden field, unresolved hole, missing body, failed unification)?
 **O38. Purity at type level.** Can a type-level table print or mutate? If types
 are evaluated, is the order of evaluation during checking observable?
 
-## 16. Evaluator (first cut)
+## 16. Evaluator
 
-`src/eval.mjs` executes syntax v3 (§18) dynamically. There is no static checker.
+`src/eval.mjs` executes syntax v4 (§19) dynamically. There is no static checker;
+type checks are runtime checks, and type variables are solved from the values
+that actually arrive.
 
 * Values, mutable environments, top-to-bottom initialisation.
-* Modules are bare statement lists with **no `self`**. Result output comes from
-  output sinks (`$stdout` and the shebang's `--output name:path`), rendered when
-  the module finishes.
-* Outputs are a log: every assignment to an output name appends a value; all are
-  rendered in display form at the end (strings quoted). An unassigned output
-  writes nothing.
-* Bodies: `... expr` returns the expression; `... r: { … }` names the result and
-  returns it. The named result is pre-initialised from the declared result type
-  (fresh record, single-constructor value, or unit).
-* A contextual `...` lambda is the only lambda-in-expression form, and only as a
-  direct call argument: the callee's declared parameter type supplies the
-  parameter names (`G (... to_string …)`).
-* Application: positional, partial, and named `{ $p <- v }` braces. A brace fires
-  at `}` and may follow a partial. Omitted **type** parameters are deduced by
-  unifying the supplied arguments’ runtime types; unsupplied value parameters are
-  errors.
-* Construction: `T { $f <- v }` builds a record type; `point { … }` forwards to a
-  variant’s single constructor.
-* Types: record types (`counter: [id:int] [inc:[]] `\(id)\(inc)``) and variants
-  (`point: `p` => ( ctor: [x:int] `d` )`).
-* Display: templates with holes and escapes; strings quoted at the boundary;
-  functions and tables `<fn>`; floats via JavaScript.
-* `bool:` overrides the builtin boolean display (`F`/`T`).
-* `add_int` (`add`) is a builtin function, and calls are curried: `add_int 1` is
-  a function awaiting one more int. `print_int`/`print_float`/`print_bool` return
-  strings (they do not write).
-* Equality: primitives by value, types structurally, records and functions by
-  identity. Operators are builtin for int/float/string/bool; `&&`/`||`
-  short-circuit.
-* Dispatch: positional keys and `${…}` groups; highest specificity wins, ties are
-  runtime errors, and the body is the fallback. A clause `...` body binds only the
-  parameters not constrained by that clause's keys.
-* Records are passed by reference; each `new_counter ()` is a fresh instance.
-  The display template’s holes are the public fields; others are hidden.
+* Types: `?` is the top/dynamic type; `@T`/`@?` are (named/anonymous) type
+  variables; concrete and applied types are first-class values.
+* Modules are bare statement lists with no `self`. Results go to output sinks
+  (`$stdout`, shebang `--output name:path`), rendered at the end.
+* Outputs default to `?`; an ascription (`sum: int;`) narrows a sink. Strings
+  are quoted in display form.
+* Declarations: values, values with defaults, functions, type/constructor
+  constants. Display-literal names are immutable.
+* Defaults: named braces fill omitted parameters; non-parameterised defaults are
+  shared, parameterised defaults are fresh per omission.
+* Bodies: `... expr` and `... r: { … }`; `=> rhs` without `...` is a default.
+* Patterns: slots capture (`$[X: T]`, `$[X: @T]`, `$[X: ?]`), typed slots unpack
+  only on `?` parameters (`$[X: T => ?]`), expression patterns match value
+  shapes (`$(1)`, `$(ctor …)`, `$(type_1)`). `$(T => v)` is gone.
+* Tables: keys and `${…}` groups; highest specificity wins; the whole-object body
+  is the fallback. Generic dispatch uses value shapes; dynamic dispatch uses `?`.
+* Records are by reference; display templates define the public fields.
+* Builtins: `to_string`, `print_int`/`print_float`/`print_bool` (return strings),
+  `add_int`/`add` (curried).
 
-Not implemented: the static checker (arity, unification, overlap, unresolved
-holes). Removed forms are parse errors (`test/reject/`).
+Not implemented: a static checker, full type inference (holes are solved from
+runtime values), and all existential/type-level machinery. Removed forms are
+parse or runtime errors (`test/reject/`, examples 33–37).
 
 ## 17. Syntax v2 (superseded)
 
@@ -1087,7 +1075,7 @@ All but (4) are parser errors; (4) is accepted only as a packed signature.
 
 ### Implemented
 
-v2 is recorded here only for history; `src/` now implements v3 (§18). `test/reject/` keeps one case per removed form.
+v2 is recorded here only for history; `src/` now implements v4 (§19). `test/reject/` keeps one case per removed form.
 
 ### Migration of the corpus
 
@@ -1109,7 +1097,7 @@ Both former open items are settled by the defaults above: `f: [a: int];`
 deduces the result, and modules have no inputs (example 14 declares and assigns
 `n` locally).
 
-## 18. Syntax v3 (current)
+## 18. Syntax v3 (superseded)
 
 v3 removes the v2 statement forms and makes the corpus depend only on the
 declaration and `<-` machinery. Everything below is implemented and covered by
@@ -1220,3 +1208,135 @@ result type; replace `[m:]`/`[n:]` declarations with typed named parameters; and
 rewrite packed signatures as ordinary function declarations. Examples 10–12 now
 use `$stdout` instead of `self`; 09/19/24 build methods from ordinary functions
 (partial application captures the instance) because bare block lambdas are gone.
+
+## 19. Syntax v4 (current)
+
+v4 replaces the `?`-universe and packed pairs with a **top type**, **inference
+variables**, **typed slots**, and **shape patterns**. `src/` implements the
+runtime approximation of this section; there is still no static checker.
+
+### Types
+
+| form | meaning |
+| --- | --- |
+| `?` | top / dynamic type: any value, no static type |
+| `@T` | named type variable (inferred, or an explicit type argument) |
+| `@?` | anonymous type variable (fresh per occurrence) |
+| `int`, `string`, … | builtin types |
+| `rec int`, `@C @T` | type application (juxtaposition) |
+| `[T] U`, `[@T] @U` | function type |
+| `()` | unit type; `[]` is a unit *parameter* in a declaration |
+
+* `?` is a value type, not the universe. It can hold any value, including a type
+  value; a `?` value is never usable in a type position (dependent types are
+  gone).
+* `@T` is solved from the value that arrives. For a **module value** the first
+  assignment fixes it, later writes must match; for a **function parameter** it
+  is fresh per call and opaque in the body. `@?` is the anonymous form.
+* Repeated `@T` in one declaration is the same variable; `@?` never links.
+* Type positions are syntactic: `[F "bool"]` is not a type; `F "bool"` is a
+  runtime value. A plain name in type position must be a type, a type alias, or
+  a type constructor.
+
+### Declarations
+
+```
+v: int;                         # value, assigned later with $v <-
+v: int => 0;                    # value with a default
+f: [x: int] int;                # function
+f: [x: int] int => ... x;       # function with a body
+na: [@T] array @T => new_array; # parameterised default (type params only)
+g: [@T] [X: @T] @T;             # explicit type parameter + inferred value type
+p: [@T] `point-of-\(T)`;        # type constructor (display literal)
+```
+
+* A declaration with a **display literal** is a constant: a type or a
+  constructor. Constants cannot be `$`-assigned. The constructor-list scope
+  decides “constructor”; module/block scope decides “type”.
+* `name: => T` is gone. A dynamic value is `name: ?;`.
+* Parameter forms: `[X: T]` value of type `T`; `[X: @T]` value whose type is
+  inferred; `[X: ?]` dynamic value; `[@T]` a type argument; `[@?]` an anonymous
+  type argument.
+* A default is used by named braces only. Non-parameterised defaults are
+  evaluated once and shared; parameterised defaults are fresh per omission. A
+  parameterised default (`=> d` without `...`) may have type parameters only; a
+  value-parameter function needs a body (`=> ...`).
+* `name: T => d` is also a transparent type alias in type position, carrying the
+  default `d` (e.g. `nullable_type_1: type_1 => ctor_1_A`).
+
+### Bodies and definitions
+
+* `$name <- e` assigns a declared value; a bare `name <- e` is illegal.
+* `name $keys <- e` defines a clause. `$type_1 <- …` / `$ctor <- …` are illegal
+  because display-literal names are constants.
+* Bodies are `... expr` and `... r: { … }`; `=> rhs` without `...` is a default.
+* A clause `...` body receives only the parameters its keys did not match.
+
+### Slots and shapes
+
+```
+$[T]                 # type argument (matches a type value)
+$[@T]                # type argument, bind T
+$[@?]                # type argument, discard
+
+$[X: T]              # value slot of concrete T
+$[X: @T]             # value slot; bind the value and its type
+$[X: ?]              # dynamic value slot, no unpacking
+$[X: @?]  /  $[X:]   # anonymous inferred value slot
+
+$[T => ?]            # unpack a ? value as concrete T, no binder
+$[X: T => ?]         # unpack a ? value as concrete T, bind X
+```
+
+* Unpacking is only legal on a **`?` parameter**, and `T` must be concrete (no
+  `@` and no `?`).
+* On a `?` parameter a concrete slot without `=>` is illegal; write `$[X: ?]`
+  or `$[X: T => ?]`. `$[X: @?]` / `$[X:]` are also illegal on `?`.
+* `$[ ]` is invalid.
+* Expression patterns are **value shapes**: `$(1)`, `$(ctor $[a:] …)`, and
+  `$(type_1)` (a type test). `$(T => v)` is gone.
+* Headless narrowing uses a slot: `$[X: int => ?] <- G;`.
+
+### Dispatch
+
+* Type-directed dispatch uses a `?` parameter and an unpacking pattern:
+  `to_string: [X: ?] string; to_string $[n: int => ?] <- …;`
+* Shape-directed dispatch uses generic types and value constructors:
+  `fmap: [data: @C @T] [func: [@T] @U] (@C @U);` with
+  `fmap $(new_rec) …` / `fmap $(unshift_rec …) …`.
+* Named braces fill value and type parameters; omitted `@` holes are inferred
+  from the supplied values, and a parameter with a default may be omitted.
+
+### Outputs
+
+* `stdout` and shebang `--output name:path` sinks default to `?`; an ascription
+  (`sum: int;`, `stdout: ?;`) narrows a sink.
+* Writes are a log rendered at the end in display form; strings keep quotes; an
+  unassigned output writes nothing.
+
+### Removed in v4
+
+| removed | replacement |
+| --- | --- |
+| `[=> T]` packed parameter | `[X: ?]` (dynamic) or `[X: @T]` (inferred) |
+| `$(T => v)` typed pattern | `$[X: T]` / `$[X: T => ?]` / `$(shape)` |
+| `name: => T` dynamic declaration | `name: ?;` |
+| `$[T] <- e` cast | typed slot / unpacking pattern |
+| `F "bool"` in a type position | syntactic types only |
+| `(T => v)` packed value, `(=>)` | gone |
+| `unit` type name | `()` |
+| `?` as the universe / type pattern | `?` is the top; type args use `[@T]` |
+
+### Tests and corpus
+
+`test/run.mjs` parses `examples/` and `test/reject/`; `test/eval.mjs` executes
+the runnable examples. Examples 01–16, 19–32, 39, 40 run; 17/18 and 33–38 are
+deliberate runtime errors; the old dependent-type part of example 23 and the
+packed-pair experiments are legacy. `test/reject/` now also locks packed
+parameters, typed patterns, dynamic declarations, empty slots, non-concrete
+unpacking, and unpack shapes.
+
+Migration from v3: `[T: ?]` → `[@T]`; `[n: ?]` used as a type → `[@T]`;
+`[=> ?]` → `[X: ?]`; `$(int => n:)` → `$[n: int => ?]` (on `?`) or
+`$[n: int]` (on a concrete parameter); `stdout: => ?` → `stdout: ?`; `unit` →
+`()`; fmap-style explicit type arguments become inferred `@C/@T/@U`.

@@ -1,0 +1,3 @@
+# Must fail: use $[@?] for any type argument; ? is a value type.
+f: [@T] int;
+f $[?] <- 1;

@@ -1,0 +1,4 @@
+# Must fail: typed expression patterns are gone.
+# Use $[T => ?] to unpack a ? value, or $(shape) for a value shape.
+f: [int] int;
+f $(int => 1) <- 1;

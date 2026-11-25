@@ -38,6 +38,18 @@ const cases = [
   { file: "26-fmap-generic", out: "11-12-\n\"1\"-\"2\"-\n" },
   { file: "27-deduce", out: "1222-1123-\n" },
   { file: "28-partial-group", out: "\"42\"\n\"fallback\"\n" },
+  { file: "29-parametric-types", out: "123\n123\nc1B\n\"5\"\n\"abc\"\npoint-of-int\npoint-of-?\n123\n1\n1\n" },
+  { file: "30-inference", out: "123\n\"abc\"\n1\n5\n" },
+  { file: "31-slots", out: "1\n2\n3\n1\n4\n7\n" },
+  { file: "32-generic-box", out: "box-5\n" },
+  { file: "33-constant", error: /constant/ },
+  { file: "34-missing-arg", error: /missing named argument/ },
+  { file: "35-inference-conflict", error: /expected int, got string/ },
+  { file: "36-unpack-miss", error: /no key matches/ },
+  { file: "37-concrete-slot", error: /on a \? parameter/ },
+  { file: "38-dependent-type", error: /is not a type/ },
+  { file: "39-type-args", out: "1\n2\n" },
+  { file: "40-type-vars", out: "point-of-int\npoint-of-@?\n" },
 ];
 
 let ok = 0;

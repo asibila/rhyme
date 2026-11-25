@@ -1,42 +1,112 @@
 ##########################################
 # STEP 0: constant types
+
 type_1: `type_1` => (ctor_1_A: `c1A`; ctor_1_B: `c1B`);
-$type_1 <- ctor_1_A; ## ILLEGAL - should not be able to assign state to types like that.
-type_1 <- (some expression); # ok, performs destructuring
-ctor_1_A <- (some expression); # ok, performs destructuring
+
+# $type_1 <- ctor_1_A;   # ILLEGAL: display literal => constant
+# type_1 <- expr;        # ILLEGAL: bare head
+# ctor_1_A <- expr;      # ILLEGAL: bare head
+
+$(ctor_1_A) <- expr;      # value shape: the nullary ctor
+$(type_1)   <- expr;      # value shape: type test, any ctor
+# $(type_1 $[@?])         # illegal: type_1 has no type parameters
 
 func_1: [x: type_1] int => ... 123;
-func_1 { }; # ILLEGAL - x not bound
+func_1 { };               # ILLEGAL: x has no default
+func_1 { $x <- ctor_1_A };
 
 ##########################################
 # STEP 1: nullable types
+
 nullable_type_1: type_1 => ctor_1_A;
 
 func_nullable_1: [x: nullable_type_1] int => ... 123;
-func_nullable_1 { }; # OK, because x becomes ctor_1_A
+func_nullable_1 { };      # ok: x = ctor_1_A
 
-# in other words, definition follows the rule
+$nullable_type_1 <- ctor_1_B;   # value changes; default stays ctor_1_A
+$stdout <- nullable_type_1;     # c1B
 
-<identifier>: type => default_value;
-
-# but value can be changed with binding (because this is not type)
-
-$nullable_type_1 <- ctor_1_B; # changes the bound value, but default value stays intact
-
+nullable_array: [@elem] array @elem => new_array;
+# nullable_array int : type array int with default new_array
+# $v <- nullable_array int;    # expression: new_array
 
 ##########################################
-# STEP 2: any type (=> ?) and type matching with ? are getting deprecated
+# STEP 2
 
-# to_string: [=> ?] string; # DEPRECATED
-to_string: [T: => x:] string; # NEW SYNTAX - matches type and value
+to_string: [X: ?] string;
 
-# BTW - defines type because it is at the scope level i.e. at the { } level
-point: [T: =>] `point-of-\(T)`; # matches type only because it is left of "=>"
+to_string $[n: int   => ?] <- print_int n;
+to_string $[n: float => ?] <- print_float n;
+to_string $[n: bool  => ?] <- print_bool n;
 
-# another example - we can bind type and value
-func_2: [T: => X: nullable_array [elem:]] int;
-# func_2: [T: array [elem_2:] => X: nullable_array [elem:]] int; # full version - unnecessary, and elem_2 == elem
+point: [@T] `point-of-\(T)`;
+$p <- point int { };       # zero-field value, displays point-of-int
+$q <- point ? { };         # argument is the top type
+
+func_2: [X: nullable_array @elem] int;
+# key: $[X: nullable_array @elem]   (no unpack)
+# for dispatch on elem: take X: ? and use $[n: nullable_array int => ?]
 
 
+
+
+
+
+
+
+
+
+
+
+F: [X: @T] 
+G: [@T] @?
+
+F: @?;
+$F <- 123; # determines that F is of type int
+$F <- "abc"; # ILLEGAL, F is int
+
+FF: [@T] [@T] int;
+
+FF $[int] $[string] 
+
+stdout: ?;
+
+F: [int] int;
+F $(1) <- 123; # OK
+F $(int => 1) <- 123; # illegal - int does not allow unpacking
+F $[X: int] <- 0;
+
+G: [?] int;
+G $(int => 1) <- "1"; # OK
+G $(int => ?) <- "is_int"; OK
+
+G $[X: int => ?] <- "is_int"; # DIFFERENT SYNTAX FOR UNPACKING
+
+
+
+
+F: [X: @T] int;
+
+F $[int] 
+
+
+fmap: [data: @C @T] [func: [@T] @U] @C @U;
+fmap $(new_rec) $[func:] = new_rec;
+fmap $(unshift_rec $[X:] $[Y:]) $[func:] =
+	unshift_rec (func X) (fmap Y func);
+
+
+
+
+shape: [?];
+
+point: `` => new_point 
+shape $[point => ?];
+shape $[rectangle => ?];
+shape $[circle => ?];
+
+
+
+collide: [arg1: ? <- shape arg1] [arg2: ? <- shape arg2] 
 
 

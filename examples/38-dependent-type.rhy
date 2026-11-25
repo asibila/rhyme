@@ -1,0 +1,4 @@
+# 38 — type positions are syntactic
+# A ? value is never usable as a type (dependent types are gone).
+F: [string] ?;
+func_1: [F "bool"] string;   # ILLEGAL: F is a value, not a type

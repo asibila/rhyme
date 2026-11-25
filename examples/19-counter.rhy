@@ -19,7 +19,7 @@ succ $(0) <- 1;
 succ $(1) <- 2;
 succ $(2) <- 3;
 
-counter: [id: int] [increment: [x: unit] ()] `\(id)\(increment)`;
+counter: [id: int] [increment: [x: ()] ()] `\(id)\(increment)`;
 
 new_counter: [] counter => ... inst: {
 	$inst.id <- counter_id;
@@ -28,7 +28,7 @@ new_counter: [] counter => ... inst: {
 	num: int;
 	$num <- 0;
 
-	inc: [x: unit] () => ... r: { $num <- succ num; $r <- (); };
+	inc: [x: ()] () => ... r: { $num <- succ num; $r <- (); };
 	$inst.increment <- inc;
 };
 

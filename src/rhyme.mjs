@@ -2,7 +2,7 @@
 // This is deliberately syntax-only: it proves the grammar, not the semantics.
 
 const PUNCT2 = new Set(["<-", "=>", "&&", "||", "==", "!=", "<=", ">="]);
-const PUNCT1 = new Set("()[]{}:;,.$?!<>".split(""));
+const PUNCT1 = new Set("()[]{}:;,.$?!<>@".split(""));
 
 export function lex(src) {
   if (src.charCodeAt(0) === 0xfeff) src = src.slice(1); // tolerate a UTF-8 BOM
@@ -150,14 +150,7 @@ class Parser {
     const name = this.expectId();
     this.expect(":");
 
-    // name: => ?;   — the only dynamic-value declaration
-    if (this.at("=>")) {
-      this.nextSym();
-      if (!this.at("?")) this.err('only "=> ?" is allowed as a dynamic value');
-      this.nextSym();
-      this.eat(";");
-      return { k: "ascribe", name, dynamic: true };
-    }
+    if (this.at("=>")) this.err('dynamic declarations are gone; write "name: ?;"');
 
     const params = [];
     while (this.at("[")) {
@@ -188,24 +181,39 @@ class Parser {
       return { k: "ascribe", name, params, display, holes, ctors };
     }
 
-    // value: name: type;   (no parameter list)
+    // value: name: type [=> default];   (no parameter list)
     if (params.length === 0) {
       const result = this.at(";") || this.peek().t === "eof" ? { k: "unit" } : this.parseType();
+      let def = null;
+      if (this.at("=>")) {
+        this.nextSym();
+        def = this.parseExpr(false);
+      }
       this.eat(";");
-      return { k: "ascribe", name, params, result, value: true };
+      return def
+        ? { k: "ascribe", name, params, result, value: true, default: def }
+        : { k: "ascribe", name, params, result, value: true };
     }
 
-    // function: name: {params} [result] [=> body];
+    // function: name: {params} [result] [=> ... body | => default];
     const result = this.at(";") || this.at("=>") ? { k: "unit" } : this.parseType();
     let body = null;
+    let def = null;
     if (this.at("=>")) {
       this.nextSym();
-      body = this.parseBody();
+      if (this.at("...")) body = this.parseBody();
+      else {
+        def = this.parseExpr(false);
+        if (params.some((p) => p.k !== "typeParam")) {
+          this.err("a default requires type parameters only; use '=> ...' for a body");
+        }
+      }
     }
     this.eat(";");
-    return body
-      ? { k: "ascribe", name, params, result, body }
-      : { k: "ascribe", name, params, result };
+    const node = { k: "ascribe", name, params, result };
+    if (body) node.body = body;
+    if (def) node.default = def;
+    return node;
   }
 
   parseBody() {
@@ -324,7 +332,12 @@ class Parser {
   parseKeyBody() {
     if (this.at("[")) {
       const p = this.parseParam(true);
-      return { k: "keySlot", name: p ? p.name : null, type: p ? p.type : null };
+      if (p.k === "typeParam") return { k: "keyTypeArg", name: p.name };
+      if (p.k === "unpack") return { k: "keyUnpack", name: p.name, type: p.type };
+      if (!p.name && p.type && p.type.k === "kType") {
+        this.err('use $[@?] for any type argument; "?" is a value type');
+      }
+      return { k: "keySlot", name: p.name, type: p.type };
     }
     if (this.at("(")) {
       const p = this.parseAtom(true);
@@ -370,32 +383,57 @@ class Parser {
 
   parseParam(pattern = false) {
     this.expect("[");
-    // An empty bracket is one slot whose type is the empty product, unit.
-    // Arity 0 is written with no brackets at all.
+    // An empty bracket is one unit value in a declaration. In a pattern it is
+    // meaningless: use $[X:] or $[@?].
     if (this.at("]")) {
+      if (pattern) this.err("an empty pattern slot is invalid; use $[X:] or $[@?]");
       this.nextSym();
       return { k: "param", name: null, type: { k: "unit" }, unit: true };
     }
-    if (this.at("=>")) {
+    if (this.at("=>")) this.err('the packed-pair parameter "[=> T]" is gone; write [X: ?]');
+
+    // [@T] / [@?] — a type argument
+    if (this.at("@")) {
       this.nextSym();
-      const t = this.parseType();
+      let name = null;
+      if (this.atId()) name = this.t[this.i++].v;
+      else if (this.eat("?")) name = null;
+      else this.err('expected a name or "?" after "@"');
       this.expect("]");
-      return { k: "param", name: null, type: { k: "unaryPair", t } };
+      return { k: "typeParam", name };
     }
+
     if (this.atId() && this.peek(1).t === "sym" && this.peek(1).v === ":") {
       const name = this.t[this.i++].v;
       this.nextSym();
-      // In pattern space a bare binder needs no type: `$[X:]`.
+      // In pattern space a bare binder needs no type: `$[X:]` (anonymous type).
       if (this.at("]")) {
         if (!pattern) this.err("a parameter type must be specified");
         this.nextSym();
         return { k: "param", name, type: null };
       }
       const type = this.parseType();
+      if (pattern && this.at("=>")) {
+        this.nextSym();
+        if (!this.at("?")) this.err('unpacking is written "=> ?"');
+        this.nextSym();
+        if (!isConcreteTypeAst(type)) this.err("unpacking requires a concrete type (no @, no ?)");
+        this.expect("]");
+        return { k: "unpack", name, type };
+      }
       this.expect("]");
       return { k: "param", name, type };
     }
+
     const type = this.parseType();
+    if (pattern && this.at("=>")) {
+      this.nextSym();
+      if (!this.at("?")) this.err('unpacking is written "=> ?"');
+      this.nextSym();
+      if (!isConcreteTypeAst(type)) this.err("unpacking requires a concrete type (no @, no ?)");
+      this.expect("]");
+      return { k: "unpack", name: null, type };
+    }
     this.expect("]");
     return { k: "param", name: null, type };
   }
@@ -436,7 +474,7 @@ class Parser {
   typeAtomStart() {
     const x = this.peek();
     if (x.t === "id" || x.t === "str" || x.t === "num") return true;
-    if (x.t === "sym" && ["?", "(", "["].includes(x.v)) return true;
+    if (x.t === "sym" && ["?", "(", "[", "@"].includes(x.v)) return true;
     // a quoted sub-pattern inside a type, e.g. dict $[k:]
     if (x.t === "sym" && x.v === "$") {
       const n = this.peek(1);
@@ -470,8 +508,14 @@ class Parser {
 
   parseTypeAtom() {
     if (this.eat("?")) return { k: "kType" };
+    if (this.at("@")) {
+      this.nextSym();
+      if (this.atId()) return { k: "typeVar", name: this.t[this.i++].v };
+      if (this.eat("?")) return { k: "typeVar", name: null };
+      this.err('expected a name or "?" after "@"');
+    }
     if (this.atId()) return { k: "typeName", name: this.t[this.i++].v };
-    // a type position may contain a term, e.g. F "bool"
+    // a type position may contain a term, e.g. F "bool" (legacy; rejected at run time)
     if (this.peek().t === "str") return { k: "typeStr", v: this.t[this.i++].v };
     if (this.peek().t === "num") return { k: "typeNum", v: Number(this.t[this.i++].v) };
     if (this.at("(")) {
@@ -533,20 +577,20 @@ class Parser {
   }
 
   parseApp(pattern) {
-    const head = this.parsePostfix(pattern);
+    const head = this.parsePostfix(pattern, false);
     const args = [];
-    while (this.atomStart(pattern)) args.push(this.parsePostfix(pattern));
+    while (this.atomStart(pattern)) args.push(this.parsePostfix(pattern, true));
     let e = args.length ? { k: "app", head, args } : head;
     if (this.at("{")) e = this.parseNamedApp(e);
     return e;
   }
 
-  parsePostfix(pattern) {
+  parsePostfix(pattern, noBrace = false) {
     let e = this.parseAtom(pattern);
     let braced = false;
     for (;;) {
       if (this.eat(".")) { e = { k: "proj", base: e, field: this.expectId() }; continue; }
-      if (!braced && this.at("{")) { e = this.parseNamedApp(e); braced = true; continue; }
+      if (!braced && !noBrace && this.at("{")) { e = this.parseNamedApp(e); braced = true; continue; }
       break;
     }
     return e;
@@ -573,6 +617,7 @@ class Parser {
     if (x.t === "sym" && x.v === "...") return true;
     if (x.t === "num" || x.t === "str" || x.t === "lit" || x.t === "id") return true;
     if (x.t === "sym" && x.v === "(") return true;
+    if (!pattern && x.t === "sym" && (x.v === "?" || x.v === "@")) return true;
     if (pattern && x.t === "sym" && x.v === "$") return true;
     return false;
   }
@@ -585,6 +630,13 @@ class Parser {
       return { k: "splatExpr", body };
     }
     if (pattern && this.at("?")) { this.nextSym(); return { k: "wild" }; }
+    if (!pattern && this.at("?")) { this.nextSym(); return { k: "top" }; }
+    if (!pattern && this.at("@")) {
+      this.nextSym();
+      if (this.atId()) return { k: "typeVarValue", name: this.t[this.i++].v };
+      if (this.eat("?")) return { k: "typeVarValue", name: null };
+      this.err('expected a name or "?" after "@"');
+    }
     if (x.t === "num") { this.nextSym(); return { k: "num", v: Number(x.v) }; }
     if (x.t === "str") { this.nextSym(); return { k: "str", v: x.v }; }
     if (x.t === "lit") { this.nextSym(); return { k: "lit", v: x.v }; }
@@ -621,7 +673,9 @@ class Parser {
       this.nextSym();
       if (this.at("[")) {
         const p = this.parseParam(true);
-        return { k: "hole", name: p ? p.name : null, type: p ? p.type : null };
+        if (p.k === "typeParam") return { k: "holeType", name: p.name };
+        if (p.k === "unpack") return { k: "holeUnpack", name: p.name, type: p.type };
+        return { k: "hole", name: p.name, type: p.type };
       }
       if (this.at("(")) return this.parseAtom(true);
       this.err("expected [ or ( after $ in a pattern");
@@ -630,10 +684,8 @@ class Parser {
       this.nextSym();
       if (this.at(")")) { this.nextSym(); return { k: "unit" }; }
       const first = this.parseAtomOrExpr(pattern);
-      if (this.eat("=>")) {
-        const second = this.parseExpr(pattern);
-        this.expect(")");
-        return { k: "pair", l: first, r: second };
+      if (this.at("=>")) {
+        this.err("typed expression patterns are gone; use $[T => ?] or $(shape)");
       }
       const items = [first];
       while (this.eat(",")) items.push(this.parseAtomOrExpr(pattern));
@@ -703,6 +755,22 @@ function paramNames(params) {
   return new Set(params.map((p) => p && p.name).filter(Boolean));
 }
 
+// Only a concrete type may be the left side of an unpacking slot.
+function isConcreteTypeAst(t) {
+  if (!t) return false;
+  if (t.k === "typeName") return true;
+  if (t.k === "unit") return true;
+  if (t.k === "product") return t.items.every(isConcreteTypeAst);
+  if (t.k === "typeApp") {
+    if (!isConcreteTypeAst(t.head)) return false;
+    return t.args.every((a) => a.k === "typeArg" && isConcreteTypeAst(a.type));
+  }
+  if (t.k === "fnType") {
+    return t.params.every((p) => isConcreteTypeAst(p.k === "namedType" ? p.type : p)) && isConcreteTypeAst(t.result);
+  }
+  return false;
+}
+
 function bodyNames(block) {
   const names = new Set();
   if (!block) return names;
@@ -767,6 +835,7 @@ export function parseTypeText(src) {
 function typeText(t) {
   switch (t.k) {
     case "typeName": return t.name;
+    case "typeVar": return t.name ? "@" + t.name : "@?";
     case "kType": return "?";
     case "unit": return "()";
     case "product": return "(" + t.items.map(typeText).join(", ") + ")";
@@ -812,6 +881,7 @@ export function dump(node, depth = 0) {
         bits.push(one("result", node.result));
       }
       if (node.body) bits.push(one("body", node.body));
+      if (node.default) bits.push(one("default", node.default));
       return bits.join("\n");
     }
     case "ctor": {
@@ -839,6 +909,8 @@ export function dump(node, depth = 0) {
       return `${pad}key-slot${node.name ? " " + node.name : ""}: ${t}`;
     }
     case "keyExpr": return one("key-expr", node.p);
+    case "keyTypeArg": return `${pad}key-type${node.name ? " " + node.name : " ?"}`;
+    case "keyUnpack": return `${pad}key-unpack${node.name ? " " + node.name : ""}: ${node.type ? typeText(node.type) : "?"}`;
     case "splat": {
       const bits = [`${pad}splat`];
       if (node.result) bits.push(`${pad}  result ${node.result}`);
@@ -879,6 +951,8 @@ export function dump(node, depth = 0) {
       else bits.push(`${pad}  <inferred>`);
       return bits.join("\n");
     }
+    case "typeParam": return `${pad}type-param ${node.name ? "@" + node.name : "@?"}`;
+    case "unpack": return `${pad}unpack${node.name ? " " + node.name : ""}: ${node.type ? typeText(node.type) : "?"}`;
     case "block": return one("block", node.stmts);
     case "expr": return one("expr", node.e);
     case "moduleBlock": return `${pad}module-block\n${go(node.shape)}\n${go(node.body)}`;
@@ -890,6 +964,7 @@ export function dump(node, depth = 0) {
       return `${pad}type-arg ${node.name}: ${t}`;
     }
     case "typeName": return `${pad}type ${node.name}`;
+    case "typeVar": return `${pad}type-var ${node.name ? "@" + node.name : "@?"}`;
     case "typeStr": return `${pad}type ${JSON.stringify(node.v)}`;
     case "typeNum": return `${pad}type ${node.v}`;
     case "typePattern": return `${pad}type-pattern ${node.name}: ${node.type ? typeText(node.type) : "<inferred>"}`;
@@ -899,6 +974,8 @@ export function dump(node, depth = 0) {
     case "unit": return `${pad}unit`;
     case "unaryPair": return `${pad}unary-pair\n${go(node.t)}`;
     case "name": return `${pad}name ${node.v}`;
+    case "top": return `${pad}?`;
+    case "typeVarValue": return `${pad}@${node.name || "?"}`;
     case "num": return `${pad}num ${node.v}`;
     case "str": return `${pad}str ${JSON.stringify(node.v)}`;
     case "lit": return `${pad}lit \`${node.v}\``;
@@ -916,6 +993,8 @@ export function dump(node, depth = 0) {
       const t = node.type ? dump(node.type, 0) : "<implied>";
       return `${pad}hole${node.name ? " " + node.name : ""}: ${t}`;
     }
+    case "holeType": return `${pad}hole-type ${node.name ? "@" + node.name : "@?"}`;
+    case "holeUnpack": return `${pad}hole-unpack${node.name ? " " + node.name : ""}: ${node.type ? typeText(node.type) : "?"}`;
     case "pat": return one("pattern", node.p);
     case "wild": return `${pad}?`;
     default: return `${pad}${JSON.stringify(node)}`;

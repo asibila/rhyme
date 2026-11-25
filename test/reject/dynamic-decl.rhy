@@ -1,0 +1,2 @@
+# Must fail: dynamic declarations are gone. Use `x: ?;`.
+x: => ?;

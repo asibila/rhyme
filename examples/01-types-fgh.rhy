@@ -1,15 +1,15 @@
 # 01 — three kinds of dispatch
 #
-# F takes a *type*  -> keys are $[ ... ]  (the slot's type is ?)
-# G takes an int     -> keys are $( ... )  (the slot holds a value)
-# H takes a typed pair: `H 1` injects `(int => 1)` before matching.
+# F takes a *type*  -> parameter [@T], keys $[ ... ]
+# G takes an int     -> parameter [x: int], keys $( ... ) / $[X: int]
+# H takes any value  -> parameter [X: ?], keys $( ... ) (value shapes)
 #
 # expected output:
-#   int
-#   two
-#   one
+#   "int"
+#   "two"
+#   "one"
 
-F: [x: ?] string;
+F: [@T] string;
 $F <- ... "";
 F $[int] <- "int";
 F $[string] <- "string";
@@ -21,21 +21,17 @@ G $(1) <- "one";
 G $(2) <- "two";
 $stdout <- (G 2);                    # two
 
-H: [=> ?] string;               # a value together with its type
+H: [X: ?] string;
 $H <- ... "";
-H $(int => 1) <- "one";
+H $(1) <- "one";
 $stdout <- (H 1);                    # one
 
-
-# matching multiple arguments
-
-multi: [A: ?] [B: int] [C: int] string;
-
+# matching multiple arguments; a type argument and two values
+multi: [@A] [b: int] [c: int] string;
 $multi <- ... "";
 
 multi ${
 	$[int] <- A;
-	$(1) <- B;
-	$(2) <- C;
+	$[b: int] <- b;
+	$[c: int] <- c;
 } <- "";
-

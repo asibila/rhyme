@@ -4,7 +4,7 @@
 # `unshift_rec` is curried too: [T] -> [rec T] -> rec T.
 # Empty backticks mean "renders no text"; they are still a display slot.
 
-rec: [T: ?] `` => (
+rec: [@T] `` => (
 	new_rec: `new_rec`;
-	unshift_rec: [T] [rec T] ``;
+	unshift_rec: [value: @T] [tail: rec @T] ``;
 );

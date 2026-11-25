@@ -1,0 +1,12 @@
+# 40 — type variables in value position
+#
+# A type variable can be passed as a type argument. An unsolved `@?` is an
+# anonymous argument; it is solved by the context when one is available.
+
+point: [@T] `point-of-\(T)`;
+
+p: point @?;              # the argument is solved by the assignment
+$p <- point int { };
+$stdout <- p;             # point-of-int
+
+$stdout <- (point @? { });  # an unsolved anonymous argument

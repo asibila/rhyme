@@ -1,0 +1,7 @@
+# 32 — a generic record type
+
+box: [@T] [value: @T] `box-\(value)`;
+
+b: box int;
+$b <- box int { $value <- 5 };
+$stdout <- b;              # box-5

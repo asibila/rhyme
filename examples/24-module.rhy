@@ -9,7 +9,7 @@ $counter_id <- 0;
 succ: [n: int] int;
 $succ <- ... add_int n 1;
 
-counter: [id: int] [increment: [x: unit] ()] [get_num: [x: unit] int] `\(id)\(increment)\(get_num)`;
+counter: [id: int] [increment: [x: ()] ()] [get_num: [x: ()] int] `\(id)\(increment)\(get_num)`;
 
 new_counter: [] counter => ... inst: {
 	$inst.id <- counter_id;
@@ -18,8 +18,8 @@ new_counter: [] counter => ... inst: {
 	num: int;
 	$num <- 0;
 
-	inc: [x: unit] () => ... r: { $num <- succ num; $r <- (); };
-	get: [x: unit] int => ... r: { $r <- num; };
+	inc: [x: ()] () => ... r: { $num <- succ num; $r <- (); };
+	get: [x: ()] int => ... r: { $r <- num; };
 
 	$inst.increment <- inc;
 	$inst.get_num <- get;
@@ -30,9 +30,9 @@ $C1 <- new_counter ();
 C1.increment ();
 C1.increment ();
 
-rec: [T: ?] `` => (
+rec: [@T] `` => (
 	new_rec: ``;
-	unshift_rec: [value: T] [tail: rec T] `\(value)-\(tail)`;
+	unshift_rec: [value: @T] [tail: rec @T] `\(value)-\(tail)`;
 );
 
 R: rec int;
@@ -40,36 +40,14 @@ $R <- new_rec;
 $R <- unshift_rec 123 R;
 $R <- unshift_rec 222 R;
 
-fmap: [C: [?] ?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U);
+fmap: [data: @C @T] [func: [@T] @U] (@C @U);
 
-fmap ${
-	$[rec] <- C;
-	$(new_rec) <- arg;
-} <- new_rec;
+fmap $(new_rec) $[f: [@T] @U] <- new_rec;
 
-fmap ${
-	$[rec] <- C;
-	$(unshift_rec $[X:] $[Y:]) <- arg;
-} <- unshift_rec (func X) (fmap rec T U Y func);
+fmap $(unshift_rec $[a: @T] $[b: @C @T]) $[f: [@T] @U] <-
+	unshift_rec (f a) (fmap b f);
 
 RR: rec int;
-
-$RR <- fmap {
-	$arg <- R;
-	$func <- add_int 1000;
-};
-
-func: [m: int] string => ... n: { $n <- "" };
-
-#func_2: int => 123;
-
-func_5: [=> ?] int => ... 0;
-func_5 $(int => n:) <- n;
-
-func_6: => ?;
-func_6 <- 123;
-
-
-
+$RR <- fmap R (add_int 1000);
 
 $stdout <- (C1);

@@ -1,16 +1,18 @@
-# 14 — a cast in expression position
+# 14 — a typed headless binding
 #
-# `$[T] <- e` is a static ascription and yields `e`. In expression position it
-# is a cast, not a binding.
+# `$[T: ... ] <- e` is a slot pattern: it checks e against T and binds the name.
+# It is not a cast; dynamic values are unpacked with `$[X: T => ?]`.
 
 n: int;
 $n <- 123;
 
-$stdout <- ($[int] <- n);            # 123
+$[X: int] <- n;
+$stdout <- X;                          # 123
 
-either: [T: ?] [U: ?] `either-\(T)-\(U)` => (
-	left: [reason: T] `\(reason)`;
-	right: [value: U] `\(value)`;
+either: [@T] [@U] `either-\(T)-\(U)` => (
+	left: [reason: @T] `\(reason)`;
+	right: [value: @U] `\(value)`;
 );
 
-$stdout <- ($[either int string] <- left 1);   # 1
+$[Y: either int string] <- left 1;
+$stdout <- Y;                          # 1

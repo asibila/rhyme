@@ -1,5 +1,5 @@
 
-# 1. map from string to type - example, give type from string
+# 1. map from string to type — example, give type from string
 
 F: [n: string] ?;
 $F <- ... void;
@@ -8,43 +8,41 @@ F $("bool") <- bool;
 F $("int") <- int;
 F $("string") <- string;
 
-func_1: [F "bool"] string; # you might use it like this
+# dependent type positions are gone in v4: `[F "bool"]` is not a type
 
-# 2. take any type - example, format the value
+# 2. take any value — format it
 #    print_int/print_float/print_bool return a string; they do not write.
 
-G: [=> ?] string;
+G: [X: ?] string;
 $G <- ... "";
 
-G $(int => n:) <- print_int n;
-G $(float => n:) <- print_float n;
-G $(bool => n:) <- print_bool n;
+G $[n: int => ?] <- print_int n;
+G $[n: float => ?] <- print_float n;
+G $[n: bool => ?] <- print_bool n;
 
-G 123; # calls print_int (result discarded)
-G 23.4; # calls print_float
-G "asdf"; # calls default method
+G 123;    # calls print_int (result discarded)
+G 23.4;   # calls print_float
+G "asdf"; # calls the default body
 
-# 3. return any type - example, return default value for type
+# 3. return any type — return a default value for a type
 
 H: [n: string] ?;
-
 $H <- ... void;
 
 H $("int") <- 0;
 H $("string") <- "";
 H $("bool") <- false;
 
+# 4. take a type — map type to string
 
-# 4. take type - example, map type to string
-
-I: [n: ?] string;
+I: [@T] string;
 $I <- ... "(unknown)";
 
 I $[int] <- "int";
 I $[string] <- "string";
 
-
-# 5. useful example, return key type from container type:
+# 5. return the key type from a container type
+#    (the type-level part is illustrative; the table is not called)
 
 key: [[?] ?] ?;
 $key <- ... void;

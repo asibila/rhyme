@@ -1,0 +1,3 @@
+# Must fail: unpacking needs a concrete type, not the top type.
+f: [?] int;
+f $[X: ? => ?] <- 1;

@@ -1,0 +1,11 @@
+# 39 — type-argument slots may be applied types, with holes
+
+point: [@T] `point-of-\(T)`;
+
+P: [@T] int;
+P $[point int] <- 1;
+$stdout <- (P (point int));   # 1
+
+Q: [@T] int;
+Q $[point @T] <- 2;
+$stdout <- (Q (point string)); # 2

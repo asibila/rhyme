@@ -1,0 +1,4 @@
+# 35 — a local @? is solved by the first assignment
+F: @?;
+$F <- 123;             # F : int
+$F <- "abc";           # ILLEGAL: F is int

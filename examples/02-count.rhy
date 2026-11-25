@@ -8,7 +8,7 @@
 #
 # needs: the `rec` type from 03-rec-type.rhy
 
-count: [rec [T:]] rec ();
-$count <- ... new_rec;           # body; the declaration supplies the arity
+count: [xs: rec ()] rec ();
+$count <- ... new_rec;
 count $(new_rec) <- new_rec;
-count $(unshift_rec $[X:] $[Y:]) <- unshift_rec () (count (Y));
+count $(unshift_rec $[X:] $[Y:]) <- unshift_rec () (count Y);

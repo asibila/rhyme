@@ -1,4 +1,4 @@
-# 15 — parameterised types, display holes, and a cast
+# 15 — parameterised types, display holes, and values
 #
 # `either` has two type parameters, and its display template references them:
 #   `either-\(T)-\(U)`
@@ -8,18 +8,15 @@
 # Hole rules:
 #   \(name)       references a binder that is already declared
 #   \(name:type)  declares a field of that type and renders it
-#
-# `$[either int string] <- left 1` is a cast: the value `left 1`, typed as
-# `either int string`.
 
 bool: `bool` => ( false: `F`; true: `T` );
 
-F: [=> ?] string;
-F $(int => 123) <- "";
+F: [X: ?] string;
+F $(123) <- "";
 
-either: [T: ?] [U: ?] `either-\(T)-\(U)` => (
-	left: [reason: T] `\(reason)`;
-	right: [value: U] `\(value)`;
+either: [@T] [@U] `either-\(T)-\(U)` => (
+	left: [reason: @T] `\(reason)`;
+	right: [value: @U] `\(value)`;
 );
 
-$stdout <- ($[either int string] <- left 1);
+$stdout <- (left 1);

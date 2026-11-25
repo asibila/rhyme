@@ -1,0 +1,3 @@
+# 33 — a display-literal name is a constant
+type_1: `type_1` => (ctor_1_A: `c1A`; ctor_1_B: `c1B`);
+$type_1 <- ctor_1_A;   # ILLEGAL: type_1 is a constant

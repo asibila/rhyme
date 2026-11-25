@@ -1,14 +1,12 @@
-# 27 — a named call with deduced type parameters
+# 27 — a call with inferred type parameters
 #
-# `fmap`'s type parameters C, T, U are omitted; they are solved by unifying the
-# supplied arguments' types:
-#
-#   $arg  <- R              R : rec            -> C = rec
-#   $func <- add_int 1000   (int -> int)       -> T = int, U = int
+# fmap's type variables are inferred from the arguments:
+#   R              : rec int     -> C = rec, T = int
+#   add_int 1000   : int -> int  -> T = int, U = int
 
-rec: [T: ?] `` => (
+rec: [@T] `` => (
 	new_rec: ``;
-	unshift_rec: [value: T] [tail: rec T] `\(value)-\(tail)`;
+	unshift_rec: [value: @T] [tail: rec @T] `\(value)-\(tail)`;
 );
 
 R: rec int;
@@ -16,16 +14,13 @@ $R <- new_rec;
 $R <- unshift_rec 123 R;
 $R <- unshift_rec 222 R;
 
-fmap: [C: [?] ?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U);
+fmap: [data: @C @T] [func: [@T] @U] (@C @U);
 
-fmap $[rec] $[T:] $[U:] $(new_rec) $(func:) <- new_rec;
-fmap $[rec] $[T:] $[U:] $(unshift_rec $[X:] $[Y:]) $(func:) <-
-	unshift_rec (func X) (fmap rec T U Y func);
+fmap $(new_rec) $[f: [@T] @U] <- new_rec;
+fmap $(unshift_rec $[a: @T] $[b: @C @T]) $[f: [@T] @U] <-
+	unshift_rec (f a) (fmap b f);
 
 RR: rec int;
-$RR <- fmap {
-	$arg <- R;
-	$func <- add_int 1000;
-};
+$RR <- fmap R (add_int 1000);
 
-$stdout <- (RR);            # 1222-1123-
+$stdout <- RR;                        # 1222-1123-
