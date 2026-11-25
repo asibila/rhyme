@@ -1,7 +1,6 @@
-# 10 — a module whose body is an expression
+# 10 — a module whose body is a statement list
 #
-# The leading #! line is just a comment to the parser.
-# The main module's result is what reaches the terminal.
+# A module has an implicit `self`; its value is what `self` ends up holding.
 
 #!/bin/rhyme
-123
+$self <- 123;

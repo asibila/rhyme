@@ -2,7 +2,7 @@
 // This is deliberately syntax-only: it proves the grammar, not the semantics.
 
 const PUNCT2 = new Set(["<-", "=>", "&&", "||", "==", "!=", "<=", ">="]);
-const PUNCT1 = new Set("()[]{}:;,.$?!<>".split(""));
+const PUNCT1 = new Set("()[]{}:;,.$?!<>\\".split(""));
 
 export function lex(src) {
   const out = [];
@@ -113,6 +113,7 @@ class Parser {
   }
 
   parseStmt() {
+    if (this.at("\\")) return this.parseDirective();
     if (this.at("$")) return this.parseDef();
     if (this.atId() && this.peek(1).t === "sym" && this.peek(1).v === ":") {
       return this.parseAscription();
@@ -120,7 +121,6 @@ class Parser {
     if (this.atId() && this.peek(1).t === "sym" && this.peek(1).v === "$") {
       return this.parseDef();
     }
-    if (this.at("(") && this.shapeThenBlock()) return this.parseShapeBlock();
 
     const e = this.parseExpr(false);
     if (this.at("<-")) {
@@ -136,6 +136,16 @@ class Parser {
     return { k: "expr", e };
   }
 
+  parseDirective() {
+    this.expect("\\");
+    const what = this.expectId();
+    this.expect("(");
+    const arg = this.at(")") ? null : this.parseExpr(false);
+    this.expect(")");
+    this.eat(";");
+    return { k: "directive", what, arg };
+  }
+
   nextSym() { this.i++; }
 
   parseShapeBlock() {
@@ -148,55 +158,64 @@ class Parser {
   parseAscription() {
     const name = this.expectId();
     this.expect(":");
+
+    // name: => {params} result;      packed signature (e.g. H: => [string] ?;)
+    if (this.at("=>")) {
+      this.nextSym();
+      const params = [];
+      while (this.at("[")) {
+        const p = this.parseParam();
+        if (p) params.push(p);
+      }
+      const result = this.at(";") || this.peek().t === "eof" ? { k: "infer" } : this.parseType();
+      this.eat(";");
+      return { k: "ascribe", name, params, result, packed: true };
+    }
+
     const params = [];
     while (this.at("[")) {
       const p = this.parseParam();
       if (p) params.push(p);
     }
 
-    const node = { k: "ascribe", name, params };
-    if (this.at("=>")) {
-      // `name: => ...`): either an initialised value, or a packed signature
-      // (a type follows, e.g. `H: => [string] ?;`)
-      this.nextSym();
-      if (this.at("[") || this.at("?")) {
-        node.packedType = this.parseType();
-        this.eat(";");
-        return node;
-      }
-      node.value = this.parseRhs();
-      this.eat(";");
-      return node;
-    }
+    // name: params `display`;                record type
+    // name: params `display` => (ctors);     variant type
     if (this.peek().t === "lit") {
-      node.display = this.t[this.i++].v;
-      node.holes = parseDisplayHoles(node.display);
+      const display = this.t[this.i++].v;
+      const holes = parseDisplayHoles(display);
+      let ctors = null;
       if (this.at("=>")) {
         this.nextSym();
-        node.ctors = this.parseCtors();
-        checkHoles(node.holes, paramNames(node.params), `type ${name}`);
+        this.expect("(");
+        ctors = [];
+        while (!this.at(")")) {
+          ctors.push(this.parseCtor());
+          this.eat(";");
+        }
+        this.expect(")");
+        checkHoles(holes, paramNames(params), `type ${name}`);
       } else if (this.at("{")) {
-        // a displayed definition: name: {params} `template` { body }
-        node.body = this.parseBlock();
-        checkHoles(node.holes, bodyNames(node.body), `definition ${name}`);
-      } else {
-        this.err('expected "=>" or "{" after a display template');
+        this.err("constructor-with-body is removed: declare a record type and a function");
       }
-    } else if (this.at("(") && this.shapeAhead()) {
-      // (m:) — a result record whose field types are deduced
-      const shape = this.parseShape();
-      node.result = shape.fields.length ? { k: "shapeType", shape } : { k: "unit" };
-      if (this.at("{")) node.body = this.parseBlock();
-    } else if (this.at(";") || this.at("{") || this.peek().t === "eof") {
-      // Nothing written: unit.
-      node.result = { k: "unit" };
-      if (this.at("{")) node.body = this.parseBlock();
-    } else {
-      node.result = this.parseType();
-      if (this.at("{")) node.body = this.parseBlock();
+      this.eat(";");
+      return { k: "ascribe", name, params, display, holes, ctors };
+    }
+
+    // name: params [resultType] [=> { body }];
+    let result = { k: "infer" };
+    if (!this.at(";") && !this.at("=>") && this.peek().t !== "eof") result = this.parseType();
+    if (this.at("{")) this.err('a declaration body requires "=>" before "{"');
+
+    let body = null;
+    if (this.at("=>")) {
+      this.nextSym();
+      if (!this.at("{")) this.err('expected "{" after "=>"');
+      body = this.parseBlock();
     }
     this.eat(";");
-    return node;
+    return body
+      ? { k: "ascribe", name, params, result, body }
+      : { k: "ascribe", name, params, result };
   }
 
   parseCtors() {
@@ -221,11 +240,11 @@ class Parser {
     }
     const display = this.expectKind("lit", "display literal");
     const holes = parseDisplayHoles(display);
-    const body = this.at("{") ? this.parseBlock() : null;
-    const scope = paramNames(params);
-    for (const n of bodyNames(body)) scope.add(n);
-    checkHoles(holes, scope, `constructor ${name}`);
-    return { k: "ctor", name, params, display, holes, body };
+    if (this.at("{")) {
+      this.err("constructor bodies are removed: use a record type and a function");
+    }
+    checkHoles(holes, paramNames(params), `constructor ${name}`);
+    return { k: "ctor", name, params, display, holes };
   }
 
   // ---- definitions -----------------------------------------------------
@@ -234,6 +253,15 @@ class Parser {
     if (this.eat("$")) {
       if (this.atId()) {
         const name = this.t[this.i++].v;
+        if (this.at(".")) {
+          // $name.field <- value
+          let target = { k: "name", v: name };
+          while (this.eat(".")) target = { k: "proj", base: target, field: this.expectId() };
+          this.expect("<-");
+          const rhs = this.parseRhs();
+          this.eat(";");
+          return { k: "defPath", target, rhs };
+        }
         const keys = this.parseKeys();
         this.expect("<-");
         const rhs = this.parseRhs();
@@ -263,6 +291,19 @@ class Parser {
     const keys = [];
     while (this.at("$")) {
       this.nextSym();
+      if (this.at("{")) {
+        // ${ pattern <- name; ... } — a key list with a binder per argument
+        this.nextSym();
+        while (!this.at("}")) {
+          const key = this.parseKey();
+          this.expect("<-");
+          const name = this.expectId();
+          this.eat(";");
+          keys.push({ k: "keyBound", key, name });
+        }
+        this.expect("}");
+        continue;
+      }
       keys.push(this.parseKeyBody());
     }
     return keys;
@@ -292,10 +333,8 @@ class Parser {
       const b = this.parseParam();
       if (b) binders.push(b);
     }
-    let shape = null;
-    if (this.at("(") && this.shapeAhead()) shape = this.parseShape();
     const body = this.at("{") ? this.parseBlock() : this.parseExpr(false);
-    return { k: "rhs", binders, shape, body };
+    return { k: "rhs", binders, body };
   }
 
   parseShape() {
@@ -356,6 +395,12 @@ class Parser {
   }
 
   parseType() {
+    if (this.at("[") && this.peek(1).t === "sym" && this.peek(1).v === "]") {
+      // `[]` in a type position is the empty product, unit
+      this.nextSym();
+      this.nextSym();
+      return { k: "unit" };
+    }
     if (this.at("[")) {
       const params = [];
       while (this.at("[")) {
@@ -479,13 +524,36 @@ class Parser {
     const head = this.parsePostfix(pattern);
     const args = [];
     while (this.atomStart(pattern)) args.push(this.parsePostfix(pattern));
-    return args.length ? { k: "app", head, args } : head;
+    let e = args.length ? { k: "app", head, args } : head;
+    if (this.at("{")) e = this.parseNamedApp(e);
+    return e;
   }
 
   parsePostfix(pattern) {
     let e = this.parseAtom(pattern);
-    while (this.eat(".")) e = { k: "proj", base: e, field: this.expectId() };
+    let braced = false;
+    for (;;) {
+      if (this.eat(".")) { e = { k: "proj", base: e, field: this.expectId() }; continue; }
+      if (!braced && this.at("{")) { e = this.parseNamedApp(e); braced = true; continue; }
+      break;
+    }
     return e;
+  }
+
+  parseNamedApp(callee) {
+    this.expect("{");
+    const args = [];
+    while (!this.at("}")) {
+      if (this.peek().t === "eof") this.err("unterminated {");
+      this.expect("$");
+      const name = this.expectId();
+      this.expect("<-");
+      const value = this.parseExpr(false);
+      this.eat(";");
+      args.push({ name, value });
+    }
+    this.expect("}");
+    return { k: "namedApp", callee, args };
   }
 
   atomStart(pattern) {
@@ -719,11 +787,9 @@ export function dump(node, depth = 0) {
         bits.push(`${pad}  display \`${node.display}\``);
         if (node.holes.length) bits.push(`${pad}  holes ${holeText(node.holes)}`);
         if (node.ctors) bits.push(one("ctors", node.ctors));
-      } else if (node.value !== undefined) {
-        bits.push(one("= value", node.value));
-      } else if (node.packedType !== undefined) {
-        bits.push(one("=> packed", node.packedType));
+        else bits.push(`${pad}  record type`);
       } else {
+        if (node.packed) bits.push(`${pad}  packed`);
         bits.push(one("result", node.result));
       }
       if (node.body) bits.push(one("body", node.body));
@@ -757,8 +823,21 @@ export function dump(node, depth = 0) {
     case "rhs": {
       const bits = [`${pad}rhs`];
       if (node.binders.length) bits.push(one("binders", node.binders));
-      if (node.shape) bits.push(one("shape", node.shape));
       bits.push(one("body", node.body));
+      return bits.join("\n");
+    }
+    case "directive": {
+      const bits = [`${pad}\\${node.what}`];
+      if (node.arg) bits.push(dump(node.arg, depth + 1));
+      return bits.join("\n");
+    }
+    case "namedApp": {
+      const bits = [`${pad}named-app`];
+      bits.push(dump(node.callee, depth + 1));
+      for (const a of node.args) {
+        bits.push(`${"  ".repeat(depth + 1)}$${a.name} <-`);
+        bits.push(dump(a.value, depth + 2));
+      }
       return bits.join("\n");
     }
     case "shape": {

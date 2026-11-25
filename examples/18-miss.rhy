@@ -15,16 +15,16 @@
 F: [int] string;
 $F <- [m:] "fallback";            # whole object
 F $(1) <- "one";
-print (F 1);                    # one
-print (F 2);                    # fallback
+\print (F 1);                    # one
+\print (F 2);                    # fallback
 
 G: [int] [bool] string;
 $G <- [m:] [n:] "fallback";            # whole object
 G $(1) $(true) <- "one-true";
-print (G 1 true);               # one-true
-print (G 1 false);              # fallback -  miss after a partial match
-print (G 2 true);               # fallback -  miss on the first argument
+\print (G 1 true);               # one-true
+\print (G 1 false);              # fallback -  miss after a partial match
+\print (G 2 true);               # fallback -  miss on the first argument
 
 H: [int] string;
 H $(1) <- "one";                # FAIL - $H has not been assigned ; no whole-object body at all
-print (H 2);                    # ? nothing to fall back to
+\print (H 2);                    # ? nothing to fall back to

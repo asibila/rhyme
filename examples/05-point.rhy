@@ -10,4 +10,4 @@ get_point: point;
 $get_point <- new_point 10 20;
 
 $(new_point $[X:] $[Y:]) <- get_point;
-print ((X, Y));                 # (10, 20)
+\print ((X, Y));                 # (10, 20)

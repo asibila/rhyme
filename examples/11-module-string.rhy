@@ -1,6 +1,6 @@
-# 11 — a module whose body is a string
+# 11 — a module whose result is a string
 #
 # Strings render with their double quotes kept: "abc".
 
 #!/bin/rhyme
-"abc"
+$self <- "abc";

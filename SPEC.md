@@ -585,14 +585,16 @@ Holes this makes explicit:
 8. `=>` has three shapes: labeled pair (non-literal LHS), definition (literal
    LHS), unary prefix (no LHS, as in `[=> ?]`).
 9. An empty display renders no text.
-10. `print` writes to the screen; `to_string` returns the display string.
+10. Printing is a **directive**: `\print (e);` writes `e` to the screen (strings
+    bare). `to_string` returns a display string. There is no `print` function.
 11. A headless `$[T] <- e` in expression position is a **cast**: it gives `e`
     the type `T` and yields the value.
 12. Display holes: `\(name)` references a binder; `\(name:type)` declares one.
 13. `[]` is one parameter of type **unit**, so `f: [];` is called `f ()`.
     Arity 0 (no brackets at all, as in `get_point: point`) is different. An
-    elided result is unit. Binders in a declaration (`[n:] (m:)`) are
-    placeholders whose types are deduced from the definition.
+    elided result is **deduced** from the body; write `()` for unit. (Superseded
+    by §17; the old “elided = unit” rule is retired.) Binders in a declaration
+    (`[n:]`) are placeholders whose types are deduced from the definition.
 14. A cast is **unification**: `$[T] <- e` needs the static type of `e` to unify
     with `T`; an unknown `?` does not, so it is a compile error.
     `$(T => ?) <- e` is the runtime-checked form — accepted, may fail at run
@@ -843,8 +845,10 @@ constructor, and `array`/`dict` are used that way. Is the type language
 higher-kinded, and how is a kind other than `?` written?
 
 **O22. Type binders in keys.** `key $[dict $[k:]] <- k;` binds a *type* `k` in a
-pattern and returns it from the body. Does that unpack an existential (see O5),
-and may a body return a type as an ordinary value?
+pattern and returns it from the body. `examples/26` shows the same for `fmap`:
+`$[T:] $[U:]` bind the caller's type arguments and the recursive call passes them
+on. Does that unpack an existential (see O5), and may a body return a type as an
+ordinary value?
 
 **O23. `: =>` has two readings.** `C1: => new_counter ();` (19) initialises a
 value; `H: => [string] ?;` (23) reads like a *packed-result signature*. One
@@ -909,3 +913,189 @@ name, hidden field, unresolved hole, missing body, failed unification)?
 
 **O38. Purity at type level.** Can a type-level table print or mutate? If types
 are evaluated, is the order of evaluation during checking observable?
+
+## 16. Evaluator (first cut)
+
+`src/eval.mjs` executes syntax v2 (§17) dynamically. There is no static checker.
+
+* Values, mutable environments, top-to-bottom initialisation.
+* Modules are statement lists with an implicit `self`; the module's value is
+  `self` at the end (unset `self` means no output).
+* Bodies: parameters in scope by name; `self` pre-bound to a fresh record (record
+  result), `()` (unit/deduced), or unset (scalar); `\self (name)` renames it; the
+  result is the final `self`.
+* Application: positional, partial, and named `{ $p <- v }` braces. A brace fires
+  at `}` and may follow a partial. Omitted **type** parameters are deduced by
+  unifying the supplied arguments’ runtime types; unsupplied value parameters are
+  errors.
+* Construction: `T { $f <- v }` builds a record type; `point { … }` forwards to a
+  variant’s single constructor.
+* Types: record types (`counter: [id:int] [inc:[]] `\(id)\(inc)``) and variants
+  (`point: `p` => ( ctor: [x:int] `d` )`).
+* Display: templates with holes and escapes; strings quoted at the boundary and
+  bare through the `\print` directive; functions `<fn>`; floats via JavaScript.
+* `bool:` overrides the builtin boolean display (`F`/`T`).
+* `add_int` (`add`) is a builtin function, and calls are curried: `add_int 1` is
+  a function awaiting one more int.
+* Equality: primitives by value, types structurally, records and functions by
+  identity. Operators are builtin for int/float/string/bool; `&&`/`||`
+  short-circuit.
+* Dispatch: positional keys and `${…}` groups; highest specificity wins, ties are
+  runtime errors, and the body is the fallback.
+* Records are passed by reference; each `new_counter ()` is a fresh instance.
+  The display template’s holes are the public fields; others are hidden.
+
+Not implemented: the static checker (arity, unification, overlap, unresolved
+holes) and call-site deduction for named braces. Removed forms are parse errors
+(`test/reject/`).
+
+## 17. Syntax v2
+
+Proposal locked. When it lands, every "removed" form is a parse error.
+
+### Modules
+
+A module is a bare statement list; the paren head is gone. A module has an
+implicit `self`, and a directive may rename it.
+
+```
+#!/bin/rhyme
+$self <- 123;
+```
+
+### Bodies and `{ }`
+
+`{ }` has three roles, chosen by position:
+
+| position | role | rules |
+| --- | --- | --- |
+| after `=>`, after `<-`, after `[x:]` | **body** | params in scope by name; `self` pre-bound; result is the final `self` |
+| after an expression | **application** | `$param <- expr` entries, evaluated in order, each seeing earlier ones; binds all remaining parameters; fires at `}`; may follow a partial; at most one brace |
+| `${ … }` in a clause head | **key group** | `pattern <- parameterName`; order-free; omitted = unconstrained |
+
+### `self` and directives
+
+* `self` is an ordinary variable, pre-bound in every body and module:
+
+  * `self` reads it; `$self <- e` replaces it; `$self.f <- e` sets a field;
+  * record result: pre-created with declared fields, unset until assigned;
+    scalar result: unset; unit result: `()`;
+  * rebinding within one brace is allowed, last write wins.
+
+A directive renames the current body's `self`:
+
+```
+new_var: [] var => {
+    \self (inst);
+    $inst.value <- 0;
+    $inst.assign_value <- [x:] { $self <- (); $inst.value <- x };
+};
+```
+
+After `\self (inst)`, `$inst` is this body's result variable and `self` refers
+outward. Valid in modules too.
+
+### Directives
+
+* `\self (name);` — rename this body’s `self` (once per body, first statement).
+* `\print (expr);` — write `expr` to the screen; a statement, not a function.
+
+### Declarations
+
+```
+f: [a: int] [b: int] R => { … };   # declare + body
+f: [a: int] [b: int] R;            # declare only
+```
+
+### Calls
+
+```
+f 1 2                          # positional, still valid
+add_int 1000                   # partial, still valid
+add_int 1000 { $b <- 2 }       # partial, finished by a brace
+f { $a <- 1; $b <- 2 }         # named
+point { $first <- 1; $second <- 2 }
+```
+
+No chained braces.
+
+### Keys
+
+```
+f $[int] $(1) <- v                    # positional, kept
+f ${ $[int] <- A; $(1) <- B } <- v    # group; names are parameter names
+```
+
+Positional keys and groups may be mixed in one clause. A clause containing any
+group entry is matched **by parameter name**: plain keys fill parameters in
+order, named keys by name, and unmentioned parameters are unconstrained (but
+still bound for the body).
+
+### Types
+
+```
+counter: [id: int] [increment: []] `\(id)\(increment)`;      # record type
+point: `point` => ( new_point: [first: int] [second: int] `\(first)\(second)` );  # variant
+```
+
+A record type gets an implicit constructor named after the type; its display
+template is the public interface.
+
+### Deduction
+
+Omitted **type** parameters in an application brace are solved by unifying the
+supplied arguments' types with the declared parameter types. Value parameters
+are never deduced; unsolved or ambiguous is an error.
+
+```
+fmap { $arg <- R; $func <- add_int 1000 }      # C=rec, T=int, U=int
+```
+
+Implemented: the evaluator unifies each declared parameter type against the
+runtime type of the supplied argument, binds the type parameters, and fills the
+omitted ones. `add_int 1000` contributes `[int] int`, which pins `T` and `U`;
+`R`’s type contributes `C`.
+
+### Defaults
+
+* A declaration’s result may be omitted: `f: [a: int];` means the result is
+  **deduced** from the body. `()` is explicit unit, and `?` is still a type
+  value. (This supersedes answer 13.)
+* Modules take **no inputs** in v2; CLI arguments are a later feature.
+* `\self` is allowed **once per body, as the first statement**.
+
+### Removed
+
+1. result shapes `(res:)` / `(n:)`;
+2. declaration bodies without `=>`;
+3. constructor-with-body;
+4. `name: => value` — the `=>` tail now parses only as a packed signature
+   (`H: => [string] ?;`); the initialiser meaning is gone;
+5. full-depth group keys (omitted = unconstrained).
+
+All but (4) are parser errors; (4) is accepted only as a packed signature.
+
+### Implemented
+
+`src/` implements v2; `test/reject/` keeps one case per removed form.
+
+### Migration of the corpus
+
+| examples | change |
+| --- | --- |
+| 01–06, 13, 17, 18, 20–23, 25, 26 | unchanged |
+| 07 | `$func_1 <- [var_1:] (n:) { … }` → `func_1: [var_1: int] int => { $var_1 <- 123; $self <- 123; }` |
+| 08 | drop `()` shapes, add `=>`: `$assign_value <- [n:] { $value <- n }`, `apply_123: [F: [int]()] () => { F 123; }` |
+| 09 | `var` becomes a record type plus `new_var` with `\self (inst)`; `(res:)` → `$self <- v.value` |
+| 10, 11 | `123` / `"abc"` → `$self <- 123;` / `$self <- "abc";` |
+| 12 | `(n:int) { $n <- 123; }` → `$self <- 123;` |
+| 14 | head removed; `n` needs a declaration or an input mechanism (**open**) |
+| 15 | head removed; rest unchanged |
+| 16 | `(m:)` result placeholder is gone; needs a “deduced result” spelling (**open**) |
+| 19, 24 | constructor-with-body → record type + `new_counter`; `C1: => …` → `$C1 <- …`; `get_num` shape → `int => { $self <- num; }` |
+| 24 | also drop the module head |
+
+Both former open items are settled by the defaults above: `f: [a: int];`
+deduces the result, and modules have no inputs (example 14 declares and assigns
+`n` locally).
+

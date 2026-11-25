@@ -1,0 +1,4 @@
+# Must fail: result shapes are removed. Use $self.
+
+f: [int] int;
+$f <- [v:] (res:) { $res <- 1; };

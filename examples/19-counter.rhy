@@ -1,10 +1,9 @@
 # 19 — an object with private state and fresh identity
 #
-# There is no arithmetic operator, so `succ` is a table: the increment is
-# explicit, and beyond its keys it falls back to the identity body.
+# `counter` is a record type; `new_counter` returns one. `\self (inst)` renames
+# the constructor's result so the method can reach the instance.
 #
-# The constructor's display literal is its public interface: `num` is declared
-# in the body but omitted from the template, so it is hidden.
+# The display template is the public interface: `num` is a local, not a field.
 #
 # expected output:
 #   0
@@ -19,23 +18,25 @@ succ $(0) <- 1;
 succ $(1) <- 2;
 succ $(2) <- 3;
 
-new_counter: [] `\(id)\(increment)` {
-	id: int;
-	$id <- counter_id;
+counter: [id: int] [increment: []] `\(id)\(increment)`;
+
+new_counter: [] counter => {
+	\self (inst);
+	$inst.id <- counter_id;
 	$counter_id <- succ counter_id;
 
 	num: int;
 	$num <- 0;
 
-	increment: [] {
-		$num <- succ num;
-	};
+	$inst.increment <- [] { $num <- succ num; };
 };
 
-C1: => new_counter ();
-C2: => new_counter ();
+C1: counter;
+$C1 <- new_counter ();
+C2: counter;
+$C2 <- new_counter ();
 
-print (C1.id);                  # 0
-print (C2.id);                  # 1
+\print (C1.id);                  # 0
+\print (C2.id);                  # 1
 
 C1.increment ();

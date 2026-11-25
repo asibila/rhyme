@@ -15,7 +15,7 @@ bool: `bool` => ( false: `F`; true: `T` );
 n: int;
 $n <- 3;
 
-print (n < 3);                      # F
-print (n > 0 && n != 9);            # T
-print (!(n == 3) || false);         # F
-print (true == true && n >= 3);     # T
+\print (n < 3);                      # F
+\print (n > 0 && n != 9);            # T
+\print (!(n == 3) || false);         # F
+\print (true == true && n >= 3);     # T

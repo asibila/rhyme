@@ -1,0 +1,64 @@
+# 24 — records, methods, and a generic fmap
+#
+# `counter` is a record type; `new_counter` returns one. `\self (inst)` reaches
+# the instance from the constructor, and methods are fields holding `[] { … }`.
+
+counter_id: int;
+$counter_id <- 0;
+
+succ: [int] int;
+$succ <- [n:] add_int n 1;
+
+counter: [id: int] [increment: []] [get_num: []] `\(id)\(increment)\(get_num)`;
+
+new_counter: [] counter => {
+	\self (inst);
+	$inst.id <- counter_id;
+	$counter_id <- succ counter_id;
+
+	num: int;
+	$num <- 0;
+
+	$inst.increment <- [] { $num <- succ num; };
+	$inst.get_num <- [] { $self <- num; };
+};
+
+C1: counter;
+$C1 <- new_counter ();
+C1.increment ();
+C1.increment ();
+
+rec: [T: ?] `` => (
+	new_rec: ``;
+	unshift_rec: [value: T] [tail: rec T] `\(value)-\(tail)`;
+);
+
+R: rec int;
+$R <- new_rec;
+$R <- unshift_rec 123 R;
+$R <- unshift_rec 222 R;
+
+fmap: [C: [?]?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U) => { };
+
+fmap ${
+	$[rec] <- C;
+	$(new_rec) <- arg;
+} <- new_rec;
+
+fmap ${
+	$[rec] <- C;
+	$(unshift_rec $[X:] $[Y:]) <- arg;
+} <- unshift_rec (func X) (fmap rec T U Y func);
+
+RR: rec int;
+
+$RR <- fmap {
+	$arg <- R;
+	$func <- add_int 1000;
+};
+
+\print (C1);
+
+
+#$self <- RR;
+

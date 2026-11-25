@@ -1,0 +1,12 @@
+# 28 — a partial key group
+#
+# A group clause may constrain only some parameters. Unmentioned parameters are
+# unconstrained, but still bound by name for the body.
+
+f: [A: ?] [B: int] [C: int] string;
+$f <- [a:] [b:] [c:] "fallback";
+
+f ${ $(1) <- B } <- to_string C;
+
+\print (f int 1 42);      # 42
+\print (f int 2 3);       # fallback

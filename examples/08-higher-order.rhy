@@ -1,15 +1,14 @@
 # 08 — higher-order functions and mutation
 #
-# `[F: [int]()]` is a parameter whose type is a function type.
+# A declaration body needs `=>` before `{`.
 # `assign_value` captures `value`, so the call mutates the module's binding.
-# `apply_123: ... { ... }` is the one-step definition form.
 
 value: int;
 $value <- 0;
 
 assign_value: [int] ();
-$assign_value <- [n:] () { $value <- n };
+$assign_value <- [n:] { $value <- n };
 
-apply_123: [F: [int]()] () { F 123; };
+apply_123: [F: [int]()] () => { F 123; };
 apply_123 assign_value;
-print (value);                  # 123
+\print (value);                  # 123

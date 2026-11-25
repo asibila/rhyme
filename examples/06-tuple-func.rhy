@@ -9,4 +9,4 @@ $func <- [a:] [b:] (0, 0, 0);   # body: one binder per parameter
 func $(1) $(2) <- (10, 20, 30);
 
 $(a:, b:, c:) <- func 1 2;
-print ((a, b, c));              # (10, 20, 30)
+\print ((a, b, c));              # (10, 20, 30)

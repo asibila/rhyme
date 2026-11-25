@@ -1,17 +1,14 @@
-# 16 — unit parameters and deduced signatures
+# 16 — unit parameters and deduced results
 #
-# `[]` is one parameter of type unit, so the function is called as f ().
+# `[]` is one parameter of type unit, so `f: [];` is called as `f ()`.
 # Arity 0 has no brackets at all (see get_point in 05-point).
-#   do_something: [];      takes unit, returns unit
-#   assign_value: [int];   takes int, returns unit (the result is elided)
+# An elided result is **deduced** from the body; `()` is explicit unit.
 #
-# Named binders in a declaration are placeholders: their types are deduced from
-# the definition.
-#   auto_function: [n:] (m:);   argument type and return type are deduced
+#   func: [];              unit parameter
+#   assign_value: [int];   int parameter, deduced result
+#   auto_function: [n:];   deduce both the argument and the result type
 
 func: [];
-assign_value: [int];  # takes int, returns unit
-
-do_something: []; # takes unit, returns unit
-
-auto_function: [n:] (m:); # deduce argument and return value types
+assign_value: [int];
+do_something: [];
+auto_function: [n:];

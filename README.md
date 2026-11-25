@@ -1,88 +1,92 @@
 # Rhyme2
 
-A language design in progress, plus an **executable front end**: a lexer and
-parser for every example so far, in plain Node.js with no dependencies.
+A language design in progress, with a working **parser** and a **dynamic
+evaluator** in plain Node.js. No dependencies.
 
-There is no evaluator yet — the program parses and shows you the syntax tree.
-`SPEC.md` holds the semantics we've pinned down and the questions still open.
-
-## Requirements
-
-Node.js 20 or newer (developed on Node 26). Nothing to install.
+`SPEC.md` holds the design: settled rules (§12), open questions (§15), and
+syntax v2 (§17).
 
 ## Run
 
-Parse all examples:
+Execute a program:
 
 ```
-node bin/rhyme.mjs examples
+node bin/rhyme.mjs --run examples/01-types-fgh.rhy
 ```
 
-Parse one file and print its syntax tree:
+```
+int
+two
+one
+```
+
+Parse and dump its syntax tree:
 
 ```
 node bin/rhyme.mjs --dump examples/05-point.rhy
 ```
 
-Look at the tokens instead:
+Show tokens:
 
 ```
 node bin/rhyme.mjs --tokens examples/01-types-fgh.rhy
 ```
 
-Run the test suite (valid examples must parse, `test/reject/*` must not):
+Run the test suites:
 
 ```
-node test/run.mjs
+node test/run.mjs      # every example parses (38 cases)
+node test/eval.mjs     # every runnable example produces the expected output (28 cases)
 ```
 
-With npm scripts:
+With npm:
 
 ```
-npm run check
-npm run dump -- examples/09-var-record.rhy
 npm test
-```
-
-`--dump` also works on directories. A parse error prints the line and a caret:
-
-```
-fail test/reject/bare-keys.rhy: a definition head must be `$...` keys or a projection path at 7:10 (got sym "<-")
-func 1 2 <- (10, 20, 30);
-         ^
+npm run run -- examples/19-counter.rhy
+npm run dump -- examples/09-var-record.rhy
 ```
 
 ## Layout
 
 ```
-SPEC.md                 language notes: rules, examples, open questions
-bin/rhyme.mjs           CLI: parse files/directories, dump AST or tokens
-src/rhyme.mjs           lexer + parser + AST printer
-examples/*.rhy          18 working snippets, one idea each
-test/reject/*.rhy       snippets that must FAIL to parse
-test/run.mjs            runs both sets
+SPEC.md              design: rules, answers, open questions
+bin/rhyme.mjs        CLI: parse, dump, tokens, run
+src/rhyme.mjs        lexer + parser + AST printer
+src/eval.mjs         evaluator (values, dispatch, records, display)
+examples/*.rhy       the corpus, one idea each
+test/reject/*.rhy    programs that must fail to parse
+test/run.mjs         parse checks
+test/eval.mjs        execution checks
 ```
 
-## What parses today
+## What runs today
 
-- `name: [in] out;` ascriptions, including function types and products
-- type definitions `name: {params} `display` => (ctor; ...);`
-- definitions `$name <- [binders] (result) { body };`
-- `$`-quoted keys: `$[type]`, `$[X:]`, `$(expr)`, `$(ctor $[X:] ...)`
-- blocks `{ ... }`, shapes `(res:)`, `()`, nested definitions
-- definitions in expression position: `print ($[int] <- n)`
-- display holes `\(name)` and `\(name:type)`, on types and constructors
-- expressions: application, `.field`, tuple `(a, b, c)`, pair `(t => v)`, `+`
-- modules with `#!/bin/rhyme`, bare expressions and `(n:int) { ... };`
+The evaluator is dynamic — types are values, but there is **no static checker**
+yet. It implements syntax v2 (§17):
 
-Not yet: nothing is evaluated. Display holes are parsed (`\(name)` references a
-binder, `\(name:type)` declares one), but they are not type-checked.
+- values, mutable environments, top-to-bottom initialisation;
+- modules as statement lists with an implicit `self`;
+- bodies with parameters in scope by name and a pre-bound `self`
+  (`\self (name)` renames it; the result is its final value);
+- tables: positional keys and `${…}` groups (partial groups match by parameter
+  name), highest specificity wins, the body is the fallback;
+- patterns: literals, constructors, binders, type slots, packed `(T => v)`;
+- record types and construction (`counter { $id <- 1 }`), methods as fields,
+  per-instance state, visibility from the display template;
+- application: positional, partial, and named `{ $p <- v }` braces;
+- display: templates with holes and backslash escapes, the `\print` directive
+  and `to_string`;
+- operators: `! && || == != < <= > >=` (no arithmetic operators);
+- arithmetic builtins `add_int` / `add`, curried: `add_int 1` is a function.
+
+Examples that run: 01–28. `22-system` declares stubs and prints nothing; `17`
+and `18` are expected to fail at run time (a declared-but-unassigned `F`, and `H`
+with keys but no body).
+
+Not implemented: the static checker. Removed v1 forms are parse errors, kept as
+`test/reject/` cases.
 
 ## Comments
 
-`#` starts a comment and runs to the end of the line, so `#!/bin/rhyme` is just
-a comment too. Put expected output next to `print` calls:
-
-```
-print (a + b + c);      # 60
-```
+`#` starts a comment to the end of the line, so `#!/bin/rhyme` is a comment too.

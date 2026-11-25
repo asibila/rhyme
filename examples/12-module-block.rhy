@@ -1,9 +1,6 @@
-# 12 — a module with a declared result
+# 12 — a module with a result
 #
-# `(n:int)` is a declaration list, not a parameter list; the body assigns it.
-# The module's value is `n`, so this renders 123.
+# The paren head is gone; a module's result is `self`.
 
 #!/bin/rhyme
-(n:int) {
-   $n <- 123;
-};
+$self <- 123;

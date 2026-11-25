@@ -1,0 +1,23 @@
+# 25 — arithmetic is a builtin function, not an operator
+#
+# There is no `+` operator (answer 24). Addition is an ordinary function:
+#
+#   add_int: [int] [int] int
+#
+# The declaration is optional — builtins are in scope already — but spelling it
+# keeps the signature visible and documented.
+#
+# expected output: 3
+
+add_int: [int] [int] int;
+
+n: int;
+$n <- add_int 1 2;
+
+\print (n);                  # 3
+\print (add_int 10 20);      # 30
+
+# functions are curried: add_int 1 is a function awaiting one more int
+add_one: [int] int;
+$add_one <- add_int 1;
+\print (add_one 41);         # 42

@@ -13,15 +13,29 @@ F: [?] string;
 $F <- [x:] "";
 F $[int] <- "int";
 F $[string] <- "string";
-print (F int);                  # int
+\print (F int);                  # int
 
 G: [int] string;
 $G <- [x:] "";
 G $(1) <- "one";
 G $(2) <- "two";
-print (G 2);                    # two
+\print (G 2);                    # two
 
 H: [=> ?] string;               # a value together with its type
 $H <- [x:] "";
 H $(int => 1) <- "one";
-print (H 1);                    # one
+\print (H 1);                    # one
+
+
+# matching multiple arguments
+
+multi: [A: ?] [B: int] [C: int] string;
+
+$multi <- [A:] [B:] [C:] "";
+
+multi ${
+	$[int] <- A;
+	$(1) <- B;
+	$(2) <- C;
+} <- "";
+

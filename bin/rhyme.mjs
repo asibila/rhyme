@@ -4,6 +4,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, extname, relative } from "node:path";
 import { lex, parse, dump } from "../src/rhyme.mjs";
+import { run, EvalError } from "../src/eval.mjs";
 
 const USAGE = `rhyme2 — parse .rhy files
 
@@ -68,6 +69,12 @@ for (const f of files) {
   const src = readFileSync(f, "utf8");
   const name = relative(process.cwd(), f) || f;
   try {
+    if (flags.has("--run")) {
+      const { stdout, value, display } = run(src, { file: name });
+      if (stdout) process.stdout.write(stdout);
+      if (value.k !== "unit") console.log(display);
+      continue;
+    }
     if (flags.has("--tokens")) {
       const toks = lex(src).filter((t) => t.t !== "eof");
       console.log(`${name}: ${toks.length} tokens`);
@@ -85,11 +92,14 @@ for (const f of files) {
     }
   } catch (e) {
     failed++;
+    if (e.stdout) process.stdout.write(e.stdout);
     console.error(`fail ${name}: ${e.message}`);
     const m = /at (\d+):(\d+)/.exec(e.message);
     if (m) console.error(caret(src, Number(m[1]), Number(m[2])));
   }
 }
 
-console.log(`\n${files.length - failed}/${files.length} parsed`);
+if (!flags.has("--run") || failed) {
+  console.log(`\n${files.length - failed}/${files.length} ${flags.has("--run") ? "ran" : "parsed"}`);
+}
 process.exitCode = failed ? 1 : 0;

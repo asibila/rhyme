@@ -1,0 +1,31 @@
+# 26 — generic fmap over rec
+#
+# The key binds the type arguments instead of matching them:
+#   $[T:] and $[U:]  bind whatever types the caller passes
+#   $[int]           would only match int
+# The recursive call then passes the bound types along: fmap rec T U ...
+#
+# C (the container) is still matched concretely with $[rec]; one clause per
+# container is what makes it an overload.
+
+rec: [T: ?] `` => (
+	new_rec: ``;
+	unshift_rec: [value: T] [tail: rec T] `\(value)-\(tail)`;
+);
+
+fmap: [C: [?]?] [T: ?] [U: ?] [arg: C T] [func: [T] U] (C U) => { };
+
+fmap $[rec] $[T:] $[U:] $(new_rec) $(func:) <- new_rec;
+fmap $[rec] $[T:] $[U:] $(unshift_rec $[X:] $[Y:]) $(func:) <-
+	unshift_rec (func X) (fmap rec T U Y func);
+
+nums: rec int;
+$nums <- unshift_rec 1 (unshift_rec 2 new_rec);
+
+plus: rec int;
+$plus <- fmap rec int int nums (add 10);
+\print (plus);                   # 11-12-
+
+words: rec string;
+$words <- fmap rec int string nums to_string;
+\print (words);                  # "1"-"2"-

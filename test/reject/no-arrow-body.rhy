@@ -1,0 +1,3 @@
+# Must fail: a declaration body requires `=>`.
+
+f: [int] int { $self <- 1; };
