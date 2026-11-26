@@ -1,0 +1,2 @@
+# Must fail: a guard is an assertion formula, not an arbitrary value.
+f: [x: int <- 1] int;

@@ -17,7 +17,7 @@ const cases = [
   { file: "05-point", out: "(10, 20)\n" },
   { file: "06-tuple-func", out: "(10, 20, 30)\n" },
   { file: "07-shadow", out: "123\n222\n" },
-  { file: "08-higher-order", out: "123\ntrue\n" },
+  { file: "08-higher-order", out: "123\n()\n" },
   { file: "09-var-record", out: "1000\n123\n" },
   { file: "10-module-expr", out: "123\n" },
   { file: "11-module-string", out: "\"abc\"\n" },
@@ -29,7 +29,7 @@ const cases = [
   { file: "17-cast-unification", error: /'F' has not been assigned/ },
   { file: "18-miss", out: "\"one\"\n\"fallback\"\n\"one-true\"\n\"fallback\"\n\"fallback\"\n", error: /has no body/ },
   { file: "19-counter", out: "0\n1\n" },
-  { file: "20-operators", out: "F\nT\nF\nT\n" },
+  { file: "20-operators", out: "1\n2\n3\n4\n5\n6\n7\n" },
   { file: "21-keys-disambiguate", out: "" },
   { file: "22-escapes", out: "" },
   { file: "23-questionmark", out: "" },
@@ -52,6 +52,29 @@ const cases = [
   { file: "40-type-vars", out: "point-of-int\npoint-of-@?\n" },
   { file: "41-shapes", out: "12\n\"ok\"\n" },
   { file: "42-bodyless-nonunit", error: /bodyless clause requires a unit result/ },
+  { file: "43-guards", out: "1\n1\n2\n3\n4\n5\n6\n7\n" },
+  { file: "44-guard-fail", out: "null\n" },
+  { file: "45-guard-nonunit", error: /guard predicate must return/ },
+  { file: "46-function-guards", out: "7\n7\n10\n3\n" },
+  { file: "47-function-guard-fail", out: "null\n" },
+  { file: "48-comparison-outside", error: /comparisons are only allowed in guards/ },
+  {
+    file: "49-fable-generator",
+    out:
+      "A Small Fable\n" +
+      "the brave fox sees a quiet mouse.\n" +
+      "every curious owl follows the clever cat.\n" +
+      "a quiet mouse wakes the brave dog.\n" +
+      "cats\n" +
+      "mice\n" +
+      "the brave dog\n" +
+      "fox\n" +
+      "a clever fox follows the brave owl.\n" +
+      "In the forest, softly.\n",
+  },
+  { file: "50-factoriel", out: "720\n" },
+  { file: "51-bare-fn", bare: 41, out: "42" },
+  { file: "52-null-guards", out: "null\nnull\n7\n6\nfalse\n7\nnull\n()\n" },
 ];
 
 let ok = 0;
@@ -63,7 +86,13 @@ for (const c of cases) {
   let error = null;
   try {
     const r = run(src);
-    actual = r.stdout + (r.value.k !== "unit" ? r.display + "\n" : "");
+    if (c.bare != null) {
+      if (r.stdout) throw new Error(`bare mode wrote stdout: ${JSON.stringify(r.stdout)}`);
+      const v = r.value.call([{ k: "num", v: c.bare }]);
+      actual = String(v.v);
+    } else {
+      actual = r.stdout + (r.value.k !== "unit" ? r.display + "\n" : "");
+    }
   } catch (e) {
     actual = e.stdout || "";
     error = e;

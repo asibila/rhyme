@@ -1,0 +1,20 @@
+# 52 — failed guards are null, and null propagates
+#
+# A failed guard yields null instead of aborting. Null is absorbing through
+# calls, so a failed guard in an argument does not need a local `||`.
+# `||` returns its right side only when the left is null.
+
+fact: [n: int <- n >= 1] int
+	=> ... mul n (fact (sub n 1) || 1);
+
+$stdout = (fact 0);              # null: precondition failed
+$stdout = (add 1 (fact 0));      # null: the argument absorbs the call
+$stdout = ((fact 0) || 7);       # 7
+$stdout = ((fact 3) || 7);       # 6: only null falls through
+
+# `&&`, `||` and `!` see success/failure, not bool. `false` is a successful
+# value, so it does not fall through and `!false` fails.
+$stdout = (false || 7);          # false
+$stdout = (false && 7);          # 7
+$stdout = (!false);              # null
+$stdout = (!null);               # ()

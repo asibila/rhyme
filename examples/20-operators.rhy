@@ -1,21 +1,35 @@
-# 20 — relational and logical operators
+# 20 — comparisons are guard assertions
 #
-# Tightest to loosest:
+# `<  <=  >  >=  ==  !=` are only legal in a guard. A true assertion succeeds;
+# a false one is a catchable miss, so `||` and `!` can recover from it. There
+# are no boolean comparison values: outside a guard a comparison is an error.
+#
+# Tightest to loosest in a guard:
 #   f x   (application)
-#   !     (prefix: !f x is !(f x), and !n == 3 is (!n) == 3)
+#   !     (prefix)
 #   <  <=  >  >=
 #   ==  !=
 #   &&
 #   ||
-#
-# There is no arithmetic: ints are compared, not computed with.
 
-bool: `bool` => ( false: `F`; true: `T` );
+is_ordered: [a: int] [b: int] int <- (a < b) => ... 1;
+$stdout = (is_ordered 1 3);
 
-n: int;
-$n = 3;
+in_range: [n: int] int <- (0 <= n && n <= 10) => ... 2;
+$stdout = (in_range 10);
 
-$stdout = (n < 3);                      # F
-$stdout = (n > 0 && n != 9);            # T
-$stdout = (!(n == 3) || false);         # F
-$stdout = (true == true && n >= 3);     # T
+non_zero: [n: int] int <- (n != 0) => ... 3;
+$stdout = (non_zero 3);
+
+not_nine: [n: int] int <- !(n == 9) => ... 4;
+$stdout = (not_nine 3);
+
+either: [a: int] [b: int] int <- (a < b || a == b) => ... 5;
+$stdout = (either 3 3);       # a < b misses, a == b succeeds
+
+at_least: [a: int] [b: int] int <- (a >= b) => ... 6;
+$stdout = (at_least 3 3);
+
+# A parameter guard may compare too; the function guard runs on the full call.
+bounded: [n: int <- (0 < n)] int <- (n < 10) => ... 7;
+$stdout = (bounded 5);

@@ -1,0 +1,3 @@
+# Must fail: guards are only allowed in declarations, not pattern slots.
+f: [x: int] int;
+f $[X: int <- p] = 1;

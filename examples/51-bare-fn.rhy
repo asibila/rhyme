@@ -1,0 +1,9 @@
+#!/bin/rhyme --bare
+# 51 — bare mode: no stdout, the module is an expression.
+#
+# The value of this file is the anonymous function below. A host can apply it
+# to an int; the CLI deliberately prints nothing.
+
+[n: int] int => m: {
+	$m = add n 1;
+};

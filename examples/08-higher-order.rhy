@@ -2,6 +2,9 @@
 #
 # A declaration body uses `... r: { }` for a statement body with a named result.
 # `assign_value` captures `value`, so the call mutates the module's binding.
+#
+# A function-level guard (`<-` after the result type) can assert a relation
+# between fully bound parameters; here `same` checks the two strings.
 
 value: int;
 $value = 0;
@@ -20,7 +23,11 @@ apply_123 assign_value;
 $stdout = (value);                  # 123
 
 # A contextual `...` lambda: the call's parameter type supplies the names.
-compose: [F: [arg_1: int] [arg_2: int] string] bool =>
-	... ((F 3 4) == to_string (add_int 3 4));
+compose: [F: [arg_1: int] [arg_2: int] string] () =>
+	... r: {
+		same: [a: string] [b: string] () <- (a == b) => ... ();
+		same (F 3 4) (to_string (add_int 3 4));
+		$r = ();
+	};
 
-$stdout = (compose (... to_string (add_int arg_1 arg_2)));   # true
+$stdout = (compose (... to_string (add_int arg_1 arg_2)));   # ()

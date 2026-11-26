@@ -1,0 +1,4 @@
+# 45 — a guard predicate must return unit
+is_bool: [?] bool => ... true;
+f: [x: ? <- is_bool x] int => ... 1;
+$stdout = (f int);

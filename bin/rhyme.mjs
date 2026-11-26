@@ -15,6 +15,7 @@ flags:
   --dump      print the AST for each file
   --tokens    print the token stream instead
   --run       execute each file (stdout + shebang outputs)
+  --bare      with --run: no stdout, evaluate for the final value
   --quiet     only report failures and the summary
   -h, --help  show this text
 
@@ -72,7 +73,7 @@ for (const f of files) {
   const name = relative(process.cwd(), f) || f;
   try {
     if (flags.has("--run")) {
-      const { stdout, writes } = run(src, { file: name });
+      const { stdout, writes } = run(src, { file: name, bare: flags.has("--bare") });
       if (stdout) process.stdout.write(stdout);
       for (const w of writes) {
         mkdirSync(dirname(w.path), { recursive: true });

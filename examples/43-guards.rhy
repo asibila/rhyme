@@ -1,0 +1,41 @@
+# 43 — declaration guards
+#
+# `<-` in a declaration parameter is a precondition. Predicates are ordinary
+# unit-returning tables; a table miss is failure (null). Guards use &&, ||, !
+# on success/failure and run when the parameter is supplied.
+
+is_shape: [?];
+
+point: `point` => new_point: [first: int] [second: int] `\(first)\(second)`;
+rectangle: `rectangle` => new_rect: [width: int] `\(width)`;
+
+is_shape $[point];
+is_shape $[rectangle];
+
+func_1: [arg: ? <- is_shape arg] int => ... 1;
+$stdout = (func_1 point);
+$stdout = (func_1 rectangle);
+
+f: [p: [?] ()] [x: ? <- p x] int => ... 2;
+$stdout = (f is_shape point);
+
+t: [@T <- is_shape T] int => ... 3;
+$stdout = (t point);
+
+both: [x: ? <- is_shape x && !is_shape int] int => ... 4;
+$stdout = (both point);
+
+either: [x: ? <- is_shape int || is_shape x] int => ... 5;
+$stdout = (either point);
+
+g: [a: ?] [b: ? <- is_shape b] int => ... 6;
+part: ?;
+$part = g point;            # partial: guard on b is not run yet
+$stdout = (part point);     # now b is supplied and the guard runs
+
+type_1: `type_1` => (ctor_1_A: `c1A`; ctor_1_B: `c1B`);
+nullable_type_1: type_1 => ctor_1_A;
+is_default_value: [x: type_1] () => ... ();
+
+fd: [x: nullable_type_1 <- is_default_value x] int => ... 7;
+$stdout = (fd { });         # default fills first, then the guard runs

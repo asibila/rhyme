@@ -1,0 +1,189 @@
+# 49 — a small procedural fable generator
+#
+# A demonstration of the current language:
+#   * variant types and display templates as text
+#   * tables and literal/value keys
+#   * parameter guards and a function-level guard
+#   * predicate tables and a type-key registry
+#   * records with per-instance state and methods
+#   * partial application and named construction
+#
+# Run:
+#   node bin/rhyme.mjs --run examples/49-fable-generator.rhy
+
+# ---- vocabulary ------------------------------------------------------
+
+article: `article` => (
+	the: `the`;
+	a: `a`;
+	every: `every`;
+);
+
+adjective: `adjective` => (
+	brave: `brave`;
+	quiet: `quiet`;
+	clever: `clever`;
+	curious: `curious`;
+);
+
+noun: `noun` => (
+	cat: `cat`;
+	dog: `dog`;
+	mouse: `mouse`;
+	owl: `owl`;
+	fox: `fox`;
+	water: `water`;
+	bread: `bread`;
+);
+
+plural_noun: `plural noun` => (
+	cats: `cats`;
+	dogs: `dogs`;
+	mice: `mice`;
+	owls: `owls`;
+	foxes: `foxes`;
+);
+
+verb: `verb` => (
+	sees: `sees`;
+	follows: `follows`;
+	wakes: `wakes`;
+);
+
+adverb: `adverb` => (
+	softly: `softly`;
+	again: `again`;
+);
+
+place: `place` => (
+	forest: `forest`;
+	garden: `garden`;
+	river: `river`;
+);
+
+title: `title` => (
+	fable: `A Small Fable`;
+	notes: `Field Notes`;
+);
+
+# ---- predicates and registries ---------------------------------------
+
+# A count noun may be pluralised. `water` and `bread` are mass nouns:
+# they have no clause here, so a call misses (failure in a guard).
+
+is_count_noun: [n: noun];
+is_count_noun $(cat);
+is_count_noun $(dog);
+is_count_noun $(mouse);
+is_count_noun $(owl);
+is_count_noun $(fox);
+
+# A type-key registry: only registered record types can be rendered.
+
+is_template: [?];
+is_template $[sentence];
+is_template $[story];
+
+# ---- phrase types ----------------------------------------------------
+
+noun_phrase: [article: article] [adj: adjective] [noun: noun]
+	`\(article) \(adj) \(noun)`;
+
+sentence: [subject: noun_phrase] [verb: verb] [object: noun_phrase]
+	`\(subject) \(verb) \(object).`;
+
+story: [title: title] [first: sentence] [second: sentence] [third: sentence]
+	`\(title)
+\(first)
+\(second)
+\(third)`;
+
+scene: [where: place] [how: adverb] `In the \(where), \(how).`;
+
+# ---- phrase constructors ---------------------------------------------
+
+np: [a: article] [adj: adjective] [n: noun] noun_phrase
+	=> ... (noun_phrase { $article = a; $adj = adj; $noun = n });
+
+s: [subj: noun_phrase] [v: verb] [obj: noun_phrase] sentence
+	=> ... (sentence { $subject = subj; $verb = v; $object = obj });
+
+# Partial application: `np the brave` is a reusable prefix.
+the_brave: [n: noun] noun_phrase;
+$the_brave = np the brave;
+
+# ---- pluralisation with a parameter guard ----------------------------
+
+# `plural water` would fail the guard: water is a mass noun.
+plural: [n: noun <- is_count_noun n] plural_noun;
+plural $(cat) = cats;
+plural $(dog) = dogs;
+plural $(mouse) = mice;
+plural $(owl) = owls;
+plural $(fox) = foxes;
+
+# ---- a stateful muse -------------------------------------------------
+
+# `muse` carries a step counter and an `advance` method. Each muse has its
+# own cell, so two muses can be used independently.
+
+muse: [step: int] [advance: [x: ()] ()] `\(step)\(advance)`;
+
+next_step: [n: int] int;
+next_step $(0) = 1;
+next_step $(1) = 2;
+next_step $(2) = 0;
+
+new_muse: [] muse => ... inst: {
+	$inst.step = 0;
+
+	step_forward: [x: ()] () => ... r: {
+		$inst.step = next_step inst.step;
+		$r = ();
+	};
+
+	$inst.advance = step_forward;
+};
+
+# ---- the generator ---------------------------------------------------
+
+# The function-level guard rejects any step outside 0..2 before dispatch.
+# `make_sentence 9` is a null guard failure, not a fallback.
+make_sentence: [step: int] sentence <- (0 <= step && step <= 2);
+make_sentence $(0) = (s (np the brave fox) sees (np a quiet mouse));
+make_sentence $(1) = (s (np every curious owl) follows (np the clever cat));
+make_sentence $(2) = (s (np a quiet mouse) wakes (np the brave dog));
+
+tell: [m: muse] story => ... r: {
+	$r.title = fable;
+
+	$r.first = (make_sentence m.step);
+	m.advance ();
+
+	$r.second = (make_sentence m.step);
+	m.advance ();
+
+	$r.third = (make_sentence m.step);
+};
+
+# ---- a generic renderer constrained by the type registry -------------
+
+render: [x: @T <- is_template @T] ? => ... x;
+
+# A predicate is an ordinary value, so it can also be a parameter.
+with_count_noun: [p: [?] ()] [n: noun <- p n] noun => ... n;
+
+# ---- generate --------------------------------------------------------
+
+story_1: story;
+$story_1 = (tell (new_muse ()));
+
+$stdout = (render story_1);
+
+# A few smaller demonstrations.
+$stdout = (plural cat);
+$stdout = (plural mouse);
+$stdout = (the_brave dog);
+$stdout = (with_count_noun is_count_noun fox);
+$stdout = (s (np a clever fox) follows (the_brave owl));
+$stdout = (scene { $where = forest; $how = softly });

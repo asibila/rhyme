@@ -1,0 +1,5 @@
+# 47 — a false function-level guard yields null
+func_2: [x: int] [y: int] int <- (x < y)
+	=> ... sub_int y x;
+
+$stdout = (func_2 10 3);        # 10 < 3 is false: null, not a crash

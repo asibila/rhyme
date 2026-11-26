@@ -1,0 +1,2 @@
+# Must fail: guards are only allowed on function parameters.
+t: `t` => (c: [x: int <- p x] `\(x)`);

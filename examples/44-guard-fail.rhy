@@ -1,0 +1,7 @@
+# 44 — a failed declaration guard yields null
+is_shape: [?];
+point: `point` => new_point: [first: int] [second: int] `\(first)\(second)`;
+is_shape $[point];
+
+func_1: [arg: ? <- is_shape arg] int => ... 1;
+$stdout = (func_1 int);   # int is not a shape: null, not a crash

@@ -1,0 +1,31 @@
+# 46 — function-level guards
+#
+# A guard after the result type is a precondition over all parameters. It runs
+# once all parameters are bound, before the body. A false precondition yields
+# null; there is no clause or fallback selection.
+
+func_2: [x: int] [y: int] int <- (x < y)
+	=> ... sub_int y x;
+
+$stdout = (func_2 3 10);        # 7
+
+func_2_sub: [x: int] [y: int] int <- (x < y)
+	=> ... sub y x;
+
+$stdout = (func_2_sub 3 10);    # 7
+
+# The guard may also be a unit-returning predicate call.
+buffer: `buffer` => new_buffer: [n: int] `\(n)`;
+is_open_socket: [?] () => ... ();
+read: [x: ?] [n: int] buffer => ... new_buffer n;
+
+func_3: [x: ?] buffer <- is_open_socket x
+	=> ... read x 10;
+
+$stdout = (func_3 1);           # 10
+
+# Named arguments bind by name before the guard is checked.
+func_4: [x: int] [y: int] int <- (x < y)
+	=> ... sub_int y x;
+
+$stdout = (func_4 { $x = 2; $y = 5 });   # 3

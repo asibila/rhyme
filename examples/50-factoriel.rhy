@@ -1,0 +1,208 @@
+fact: [n: int <- n >= 1] int => ... mul n (fact (sub n 1) || 1);
+$stdout = fact 6;
+
+func: [] int => ... 123;
+$stdout = func ();
+
+
+reg_id_counter : int => 0;
+
+fetch_next_reg_id: [] int => ... m: {
+	$m = reg_id_counter;
+	$reg_id_counter = add reg_id_counter 1;
+};
+
+reg: `` => new_reg_data: [id: int] [value: int] `\(id) \(value)`;
+
+new_reg: [] reg => ... new_reg_data (fetch_next_reg_id ()) 0;
+
+assign_reg: [R: reg] [arg: int] => ... m: { $R.value = arg };
+cast_reg: [R: reg] int => ... R.value;
+
+R1: reg => new_reg ();
+
+assign_reg R1 123;
+
+$stdout = cast_reg R1;
+
+print: [value: ?] string;
+print $[X: int => ?] = print_int X;
+print $[X: float => ?] = print_float X;
+print $[X: bool => ?] = print_bool X;
+
+
+
+$stdout = print 12322.4;
+
+
+point: `` => new_point: [first: int] [second: int] ``;
+
+
+#########################################
+## STEP 0
+int_union: int => $[222; 123];
+int_union: int => @{222; 123};
+int_union: $[222; 123]; ## SAME
+int_const: int => 123; ## cannot be turned into a variable
+int_const: 123; ## SAME
+func_const: [int] string => ... "";
+mutable_int_union: $(int => $[1; 2]);
+$mutable_int_union ++;
+#$mutable_int_union: int => $[1; 2];
+#$mutable_int_union ++;
+type: `` => $[ctor_1: [int] ``; ctor_2: [int] ``];
+func_const_2: [int] type => $[ctor_1; ctor_2];
+func_const_3: [int] type => $[... "A"; ... "B"]; # invalid
+
+int_union: int => @[222; 123];
+int_union: @[222; 123]; ## SAME
+type: `` => @[ctor_1: [int] ``; ctor_2: [int] ``];
+
+
+## STEP 1: unpacking ?
+$var1: ?;
+$var1 = 1;
+$var1 = "abc";
+
+func_any: [?] string;
+## func_any $[X: int => ?]; ## INVALID?
+func_any $(int => X:);
+func_any $(int => $(1));
+func_any $[X: int]; # INVALID
+func_any $(either int string => left $(1));
+
+func_any $X:  ;
+func_any $(1); ## ADD => if you need it, but it matches by 1
+func_add $(left 1);
+func_add $[X: int => $[1; 2;]];
+
+var_1: $(int);
+
+func: [@T];
+func @[1;2;3];
+func @(int);
+
+
+## CAN WE STORE PATTERNS
+P: $[1; 2; 3];
+P: $(either int string => left $[?])
+
+T: $[C1: ``; C2: ``];
+
+F: [X: T]
+F: [X: P]
+
+F: [$X: ?];
+
+F: [X: int; Y: float];
+
+
+
+
+##################### STEP 0: NOVO #########################
+
+G: [?]
+G $(int => $[X:]); ## ILLEGAL - not $[] applied to anything
+G $[X: int]; # ok
+G $(either int string => left $[X:])
+G $(either int string => left $(1));
+
+
+
+H: [@T]
+H: $(int);
+H: $(float);
+
+$var: int;
+const: int => 123;
+
+$const # use it like this, then it would complain if there are multiple items
+
+I: [[int]string];
+
+I $[
+
+## jedino da uvedemo [] koji se aplicira na desno unutar expressiona;
+
+T: [int]string => F[];
+
+
+array int;
+array (int => $[1;2]);
+
+$int_var: int => $[1; 2];
+$int_var = 1;
+$int_var = 10; # ERROR
+$int_var = add $int_var 1;
+
+type_1: `` => $[ctor_1: ``; ctor_2: ``];
+
+
+
+# functions with single arg:
+
+getchar: [] char;
+getchar ();
+
+
+func_10: [F: char =>] => m: {
+	X: F;
+};
+
+
+
+## FUNCTIONS
+
+func_const: [int] string => ... "";
+
+$func_var: [int] string;
+
+
+
+
+int_var: int => $?; # variable
+$int_var = 123;
+
+
+int_typedef: int; # defines alias for int
+string: array char;
+
+
+func_1: [int] string => ... "abc";
+func_2: func_1; # alias for func_1
+
+
+func_3: [int] string => ... $?;
+func_3 $(123) = ""; # INVALID
+func_3 $[X: int] = ""; # OK
+$func_3 = func_2;
+
+func_4: [int] string => [$?] ... $?;
+$func_4 = func_3;
+func_4 $(1) = "abc";
+
+func_5: [int] [int] string => [$?] ... $?;
+func_5 $(1) $[X:] = "";
+
+func_6: [int] [int] string => [$?] ... "";
+
+
+fmap: [data: @C @T] [func: [@T] @U] @C @U => [$?] ... $?;
+fmap $(new_rec) ... = new_rec;
+fmap $(unshift_rec $[X:] $[Y:]) ... = unshift_rec (func X) (fmap Y func);
+
+
+
+func_10: [$x: int] string => ... m: { $X = 123 };
+
+
+$func_11: [int] string => ... ""; ## INVALID - cannot be both const and var
+func_11 $(1) = "abc"; # modify the heap object 
+
+
+
+
+
+
+
+

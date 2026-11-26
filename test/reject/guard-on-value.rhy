@@ -1,0 +1,2 @@
+# Must fail: a function-level guard needs a parameter list.
+x: int <- p x;

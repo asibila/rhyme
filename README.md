@@ -44,8 +44,8 @@ node bin/rhyme.mjs --tokens examples/01-types-fgh.rhy
 Run the test suites:
 
 ```
-node test/run.mjs      # examples parse, reject cases fail (67 cases)
-node test/eval.mjs     # runnable examples produce the expected output (42 cases)
+node test/run.mjs      # examples parse, reject cases fail (82 cases)
+node test/eval.mjs     # runnable examples produce the expected output (52 cases)
 ```
 
 With npm:
@@ -80,37 +80,56 @@ is **no static checker** yet. It implements syntax v4 (§19):
   is solved by the first assignment, a function parameter’s is fresh per call;
 - values, mutable environments, top-to-bottom initialisation;
 - binding/assignment uses `=` (`$x = e`, `name $keys = e`, `expr.field = v`);
-  `<-` is gone and is a parse error;
+  `<-` is only a guard (parameter or function-level);
 - modules as bare statement lists: results go to output sinks (`$stdout` and
-  shebang `--output name:path`), rendered at the end;
+  shebang `--output name:path`), rendered at the end; a `#!/bin/rhyme --bare`
+  module has no `stdout`, and its final expression is the result;
 - declarations with display literals are **constants** (types/constructors);
   `$type_1 = …` is rejected;
 - typed constants/defaults (`name: T => default`), shared or fresh as
   parameterised; named braces fill omitted parameters;
-- bodies `... expr` / `... r: { … }`; `=> rhs` without `...` is a default;
+- bodies `... expr` / `... r: { … }`; `=> rhs` without `...` is a default
+  (in a bare function, `=> r: { … }` is also a body);
 - tables: positional keys and `${…}` groups, highest specificity wins, the body
   is the fallback; a clause `...` body sees only unmatched parameters;
 - slots: `$[T]`/`$[@T]`/`$[@?]` type arguments; `$[X: T]`/`$[X: @T]`/`$[X: ?]`
   value slots; `$[X: T => ?]` unpacks a `?` value as a concrete `T`;
 - shapes: `$(1)`, `$(ctor …)`, `$(type_1)`; typed patterns `$(T => v)` are gone;
-- headless narrowing `$[X: int => ?] = G;`;
 - generic dispatch by value shapes (`fmap`) and dynamic dispatch by `?` unpacking
   (`to_string`);
+- headless narrowing `$[X: int => ?] = G;`;
+- declaration guards: parameter guards `[x: T <- predicate x]` and a
+  function-level precondition after the result type `... R <- (x < y) => ...`;
+  unit-returning predicate tables or comparisons, `&&`/`||`/`!`, table miss and
+  false comparison = failure; a failed guard yields **null**, not an abort, and
+  null is absorbing through calls (`add 1 (fact 0)` is null); `&&`/`||`/`!` work
+  on success (`()`) and failure (`null`), never on `bool` (`x || y` is `x`
+  unless `x` is null); partial application checks supplied parameters, defaults
+  fill before the guard;
 - record types and construction (`counter { $id = 1 }`, `point int { }`),
   methods as fields, per-instance state, visibility from the display template;
 - application: positional, partial, and named `{ $p = v }` braces; `@` holes are
   inferred from the supplied values;
 - display: templates with holes and backslash escapes, `to_string`; strings are
   quoted at the boundary;
-- operators: `! && || == != < <= > >=` (no arithmetic operators);
-- arithmetic builtins `add_int` / `add`, curried: `add_int 1` is a function;
-  `print_int` / `print_float` / `print_bool` return strings.
+- operators: comparisons `< <= > >= == !=` are guard-only assertions, not
+  boolean values; `! && ||` combine success (`()`) and failure (`null`), not
+  `bool` values (no arithmetic operators); `bool` is just another type;
+- arithmetic builtins `add_int` / `add`, `sub_int` / `sub` and `mul_int` / `mul`,
+  curried: `sub_int 3` is a function; `print_int` / `print_float` / `print_bool`
+  return strings.
 
-Examples that run: 01–16, 19–32, 39–41; 17/18, 33–38 and 42 are deliberate
-runtime errors (unassigned `F`, `H` with keys but no body, constant assignment,
-missing argument, inference conflict, unpack miss, illegal concrete slot on `?`,
-dependent type position, bodyless clause with a non-unit result). Example 23
-keeps the value/table part; its dependent type position is legacy.
+Examples that run: 01–16, 19–32, 39–41, 43, 44, 46, 47 and 49–52; 17/18, 33–38,
+42, 45 and 48 are deliberate errors (unassigned `F`, `H` with keys but no body,
+constant assignment, missing argument, inference conflict, unpack miss, illegal
+concrete slot on `?`, dependent type position, bodyless clause with a non-unit
+result, non-unit guard predicate, comparison outside a guard). 44 and 47 show a
+failed guard producing null instead of an error. 51 is bare mode (no stdout).
+Example 23 keeps the value/table part; its dependent type position is legacy.
+
+`examples/49-fable-generator.rhy` is a longer demo: a small procedural fable
+generator built from variant types, display templates, guarded tables, a type
+registry, a stateful `muse` record, and partial application.
 
 Not implemented: the static checker and full type inference. Removed v1–v3 forms
 are parse/runtime errors, kept as `test/reject/` cases.

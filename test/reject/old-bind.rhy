@@ -1,3 +1,3 @@
-# Must fail: `<-` is gone. Binding and assignment use `=`.
+# Must fail: assignment uses `=`. `<-` is only a declaration-parameter guard.
 x: int;
 $x <- 1;

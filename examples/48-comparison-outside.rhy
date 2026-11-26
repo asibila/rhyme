@@ -1,0 +1,5 @@
+# 48 — comparisons outside a guard are a type error
+n: int;
+$n = 3;
+
+$stdout = (n < 4);              # only guards contain comparisons

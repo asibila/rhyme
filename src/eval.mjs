@@ -1,12 +1,16 @@
-// Rhyme2 — evaluator for syntax v3.
+// Rhyme2 — evaluator for syntax v4.
 // No static checker; types are values, output happens at the end of a module.
 
 import { parse } from "./rhyme.mjs";
 
 export class EvalError extends Error {}
+export class GuardMiss extends EvalError {}
 const fail = (msg) => { throw new EvalError(msg); };
 
 const UNIT = Object.freeze({ k: "unit" });
+// The value of a failed guard. It is an absorbing value: once a call sees it
+// as an argument, the call is null too. `||` is the way out.
+const NULL = Object.freeze({ k: "null" });
 
 const mkType = (name, extra = {}) => ({ k: "type", name, args: [], ...extra });
 const T_INT = mkType("int", { builtin: true });
@@ -86,6 +90,7 @@ function typeOf(v) {
     case "str": return T_STRING;
     case "bool": return T_BOOL;
     case "unit": return T_UNIT;
+    case "null": return T_TOP;
     case "type": return T_TOP;
     case "record": return v.type || mkType("record");
     case "tuple": return mkType("(,)", { args: v.items.map(typeOf) });
@@ -116,14 +121,16 @@ function isTypeParamType(t) {
   return false;
 }
 
-// `#!/bin/rhyme --output name:path ...`
+// `#!/bin/rhyme --bare --output name:path ...`
 export function parseShebang(source) {
   if (source.charCodeAt(0) === 0xfeff) source = source.slice(1);
   const first = source.split(/\r?\n/, 1)[0] || "";
   const outputs = [];
-  if (!first.startsWith("#!")) return { outputs };
+  let bare = false;
+  if (!first.startsWith("#!")) return { outputs, bare };
   const parts = first.slice(2).trim().split(/\s+/).slice(1);
   for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === "--bare") { bare = true; continue; }
     let spec = null;
     if (parts[i] === "--output") spec = parts[++i];
     else if (parts[i].startsWith("--output=")) spec = parts[i].slice("--output=".length);
@@ -132,13 +139,14 @@ export function parseShebang(source) {
     if (c <= 0) fail(`bad --output: ${spec}`);
     outputs.push({ name: spec.slice(0, c), path: spec.slice(c + 1) });
   }
-  return { outputs };
+  return { outputs, bare };
 }
 
 export function run(source, opts = {}) {
-  const { outputs } = parseShebang(source);
+  const { outputs, bare: shebangBare } = parseShebang(source);
+  const bare = opts.bare === true || shebangBare;
   const tree = parse(source);
-  const ev = new Evaluator(outputs);
+  const ev = new Evaluator(outputs, { bare });
   try {
     ev.runModule(tree);
     return ev.finish();
@@ -151,11 +159,14 @@ export function run(source, opts = {}) {
 }
 
 class Evaluator {
-  constructor(outputs = []) {
+  constructor(outputs = [], opts = {}) {
     this.sinks = [];
     this.typeDefs = new Map();
     this.boolDisplay = null;
     this.outputSpecs = outputs;
+    this.bare = !!opts.bare;
+    this.lastValue = UNIT;
+    this._inBody = false;
   }
 
   // ---- display --------------------------------------------------------
@@ -171,6 +182,7 @@ class Evaluator {
       case "str": return JSON.stringify(v.v);
       case "bool": return this.displayBool(v.v);
       case "unit": return "()";
+      case "null": return "null";
       case "type": return this.displayType(v);
       case "fn": case "builtin": case "partial": case "table": return "<fn>";
       case "packed": return this.display(v.value);
@@ -252,9 +264,13 @@ class Evaluator {
   runModule(tree) {
     const root = this.installBuiltins(new Env());
     const env = new Env(root);
-    this.declareOutput("stdout", null, env);
+    // Bare mode has no implicit stdout: the module is an expression and its
+    // value is the result.
+    if (!this.bare) this.declareOutput("stdout", null, env);
     for (const o of this.outputSpecs) this.declareOutput(o.name, o.path, env);
-    for (const s of tree.body) this.evalStmt(s, env);
+    let last = UNIT;
+    for (const s of tree.body) last = this.evalStmt(s, env);
+    this.lastValue = last;
   }
 
   declareOutput(name, path, env) {
@@ -269,7 +285,8 @@ class Evaluator {
 
   finish() {
     const { stdout, writes } = this.renderOutputs();
-    return { value: UNIT, stdout, writes };
+    const value = this.bare ? this.lastValue : UNIT;
+    return { value, display: this.display(value), stdout, writes };
   }
 
   renderOutputs() {
@@ -301,6 +318,7 @@ class Evaluator {
     put("void", T_VOID, { constant: true, kind: "type" });
     put("true", vBool(true), { constant: true, kind: "ctor" });
     put("false", vBool(false), { constant: true, kind: "ctor" });
+    put("null", NULL, { constant: true, kind: "ctor" });
     put("to_string", builtin("to_string", 1, (args) => vStr(this.text(args[0])), ["x"]));
     const printer = (name) => builtin(name, 1, (args) => vStr(this.text(args[0])), ["x"]);
     put("print_int", printer("print_int"));
@@ -319,6 +337,32 @@ class Evaluator {
     };
     put("add_int", intAdd("add_int"));
     put("add", intAdd("add"));
+    const intSub = (name) => {
+      const b = builtin(name, 2, (args) => {
+        const [a, c] = args;
+        if (a.k !== "num" || c.k !== "num" || !Number.isInteger(a.v) || !Number.isInteger(c.v)) {
+          fail(`${name} expects two ints, got ${this.display(a)} and ${this.display(c)}`);
+        }
+        return vNum(a.v - c.v);
+      }, ["a", "b"]);
+      b.type = { params: [T_INT, T_INT], result: T_INT };
+      return b;
+    };
+    put("sub_int", intSub("sub_int"));
+    put("sub", intSub("sub"));
+    const intMul = (name) => {
+      const b = builtin(name, 2, (args) => {
+        const [a, c] = args;
+        if (a.k !== "num" || c.k !== "num" || !Number.isInteger(a.v) || !Number.isInteger(c.v)) {
+          fail(`${name} expects two ints, got ${this.display(a)} and ${this.display(c)}`);
+        }
+        return vNum(a.v * c.v);
+      }, ["a", "b"]);
+      b.type = { params: [T_INT, T_INT], result: T_INT };
+      return b;
+    };
+    put("mul_int", intMul("mul_int"));
+    put("mul", intMul("mul"));
     return root;
   }
 
@@ -344,7 +388,7 @@ class Evaluator {
     }
 
     const existing = env.find(node.name);
-    const sig = { params: node.params, result: node.result, value: !!node.value };
+    const sig = { params: node.params, result: node.result, value: !!node.value, guard: node.guard || null, env };
     const typeValue = node.result ? this.evalTypeNode(node.result, env) : T_TOP;
 
     // An output sink is declared by the shebang / stdout; an ascription narrows it.
@@ -396,6 +440,7 @@ class Evaluator {
           resultAst: node.result,
           defaultAst: node.default,
           env,
+          sig,
         };
         cell.value = fn; cell.set = true;
         cell.typeAliasFn = fn;
@@ -409,6 +454,14 @@ class Evaluator {
       }
     }
     return UNIT;
+  }
+
+  evalBareFn(node, env) {
+    const sig = { params: node.params, result: node.result, value: false, guard: node.guard || null, env };
+    const splat = node.body.k === "alias"
+      ? { k: "splat", result: null, body: node.body.body }
+      : node.body;
+    return this.makeFn(null, node.params, splat, env, sig);
   }
 
   evalNamedBody(name, params, body, env, sig) {
@@ -588,12 +641,25 @@ class Evaluator {
             self.checkRuntimeType(t, args[i], p.name ? `parameter '${p.name}'` : "");
           }
         });
-        const v = self.evalSplat(splat, env, sig, null, tenv);
-        if (sig && sig.result) {
-          const rt = self.evalTypeNode(sig.result, closure, tenv);
-          self.checkRuntimeType(rt, v);
+        for (const [n, v] of tenv) {
+          const tv = self.resolveVar(v);
+          if (!tv) continue;
+          let c = env.find("@" + n);
+          if (!c) { c = env.declare("@" + n); }
+          c.value = tv; c.set = true;
         }
-        return v;
+        const prevBody = self._inBody;
+        self._inBody = true;
+        try {
+          const v = self.evalSplat(splat, env, sig, null, tenv);
+          if (sig && sig.result) {
+            const rt = self.evalTypeNode(sig.result, closure, tenv);
+            self.checkRuntimeType(rt, v);
+          }
+          return v;
+        } finally {
+          self._inBody = prevBody;
+        }
       },
     };
   }
@@ -703,6 +769,7 @@ class Evaluator {
       case "str": return vStr(node.v);
       case "lit": return vStr(node.v);
       case "unit": return UNIT;
+      case "anonFn": return this.evalBareFn(node, env);
       case "top": return T_TOP;
       case "typeVarValue": {
         if (node.name) {
@@ -903,9 +970,179 @@ class Evaluator {
     };
   }
 
+  isFailure(v) { return v.k === "null"; }
+
+  // Returns false when a guard fails. Type/arity errors still throw: a failed
+  // guard is data (null), a malformed one is a bug.
+  checkParamGuards(callee, args, env) {
+    const sig = callee.sig;
+    const params = sig && sig.params;
+    if (!params || !params.some((p) => p && p.guard)) return true;
+    const base = sig.env || env;
+    const e = new Env(base);
+    const tenv = new Map();
+    for (let i = 0; i < args.length && i < params.length; i++) {
+      const p = params[i];
+      if (!p) continue;
+      if (p.k === "typeParam") {
+        if (!args[i] || args[i].k !== "type") fail("expected a type argument");
+        if (p.name) {
+          const c = e.declare(p.name); c.value = args[i]; c.set = true;
+          const tc = e.declare("@" + p.name); tc.value = args[i]; tc.set = true;
+        }
+        if (p.guard && this.isFailure(this.evalGuard(p.guard, e))) return false;
+        continue;
+      }
+      if (p.name) { const c = e.declare(p.name); c.value = args[i]; c.set = true; }
+      if (p.type) {
+        const t = this.evalTypeNode(p.type, base, tenv);
+        if (!this.typeAccepts(t, args[i])) {
+          fail(`expected ${this.displayType(t)}, got ${this.displayType(typeOf(args[i]))}`);
+        }
+      }
+      for (const [n, v] of tenv) {
+        const tv = this.resolveVar(v);
+        if (!tv) continue;
+        let c = e.find("@" + n);
+        if (!c) { c = e.declare("@" + n); }
+        c.value = tv; c.set = true;
+      }
+      if (p.guard && this.isFailure(this.evalGuard(p.guard, e))) return false;
+    }
+    return true;
+  }
+
+  // Guard formulas evaluate to unit (success) or null (failure); there is no
+  // boolean value in the middle. `&&` is "left then right", `||` is "left or
+  // else right", `!` swaps success and failure.
+  evalGuard(node, env) {
+    switch (node.k) {
+      case "bin":
+        if (node.op === "&&") {
+          const l = this.evalGuard(node.l, env);
+          return this.isFailure(l) ? l : this.evalGuard(node.r, env);
+        }
+        if (node.op === "||") {
+          const l = this.evalGuard(node.l, env);
+          return this.isFailure(l) ? this.evalGuard(node.r, env) : l;
+        }
+        if (["<", "<=", ">", ">=", "==", "!="].includes(node.op)) {
+          return this.evalGuardCompare(node, env);
+        }
+        fail("a guard may only use comparisons, &&, ||, !");
+      case "un":
+        if (node.op === "!") {
+          const v = this.evalGuard(node.e, env);
+          return this.isFailure(v) ? UNIT : NULL;
+        }
+        fail("a guard may only use !");
+      case "app": {
+        const callee = this.evalExpr(node.head, env);
+        const args = node.args.map((a) => this.evalExpr(a, env));
+        const prev = this._inBody;
+        this._inBody = false;
+        try {
+          const v = this.applyValue(callee, args, env);
+          if (!v || this.isFailure(v)) return NULL;
+          if (v.k !== "unit") fail("guard predicate must return ()");
+          return UNIT;
+        } catch (e) {
+          if (e instanceof GuardMiss && e.direct) return NULL;
+          throw e;
+        } finally {
+          this._inBody = prev;
+        }
+      }
+      case "namedApp": {
+        const prev = this._inBody;
+        this._inBody = false;
+        try {
+          const v = this.evalNamedApp(node, env);
+          if (!v || this.isFailure(v)) return NULL;
+          if (v.k !== "unit") fail("guard predicate must return ()");
+          return UNIT;
+        } catch (e) {
+          if (e instanceof GuardMiss && e.direct) return NULL;
+          throw e;
+        } finally {
+          this._inBody = prev;
+        }
+      }
+      case "name": {
+        const v = this.evalExpr(node, env);
+        if (v && (this.isFailure(v) || v.k === "unit")) return v;
+        fail("guard predicate must return ()");
+      }
+      default:
+        fail("invalid guard");
+    }
+  }
+
+  // A comparison is an assertion: success is unit, a false comparison is null.
+  // `&&`/`||`/`!` decide whether a null assertion escapes.
+  evalGuardCompare(node, env) {
+    const l = this.evalExpr(node.l, env);
+    const r = this.evalExpr(node.r, env);
+    switch (node.op) {
+      case "==": return this.equal(l, r) ? UNIT : NULL;
+      case "!=": return this.equal(l, r) ? NULL : UNIT;
+    }
+    if (this.isFailure(l) || this.isFailure(r)) return NULL;
+    const a = this.comparable(l);
+    const b = this.comparable(r);
+    if (l.k !== r.k) fail(`cannot compare ${this.display(l)} and ${this.display(r)}`);
+    if (node.op === "<") return a < b ? UNIT : NULL;
+    if (node.op === ">") return a > b ? UNIT : NULL;
+    if (node.op === "<=") return a <= b ? UNIT : NULL;
+    return a >= b ? UNIT : NULL;
+  }
+
+  checkFunctionGuard(callee, args, env) {
+    const sig = callee.sig;
+    if (!sig || !sig.guard) return true;
+    const base = sig.env || env;
+    const e = new Env(base);
+    const tenv = new Map();
+    const params = sig.params || [];
+    for (let i = 0; i < args.length && i < params.length; i++) {
+      const p = params[i];
+      if (!p) continue;
+      if (p.k === "typeParam") {
+        if (!args[i] || args[i].k !== "type") fail("expected a type argument");
+        if (p.name) {
+          const c = e.declare(p.name); c.value = args[i]; c.set = true;
+          const tc = e.declare("@" + p.name); tc.value = args[i]; tc.set = true;
+        }
+        continue;
+      }
+      if (p.name) { const c = e.declare(p.name); c.value = args[i]; c.set = true; }
+      if (p.type) {
+        const t = this.evalTypeNode(p.type, base, tenv);
+        if (!this.typeAccepts(t, args[i])) {
+          fail(`expected ${this.displayType(t)}, got ${this.displayType(typeOf(args[i]))}`);
+        }
+      }
+      for (const [n, v] of tenv) {
+        const tv = this.resolveVar(v);
+        if (!tv) continue;
+        let c = e.find("@" + n);
+        if (!c) { c = e.declare("@" + n); }
+        c.value = tv; c.set = true;
+      }
+    }
+    return !this.isFailure(this.evalGuard(sig.guard, e));
+  }
+
   applyValue(callee, args, env, calleeNode) {
+    // Null is absorbing: a failed guard inside an argument makes the whole
+    // call null instead of surfacing a type error.
+    if (callee.k === "null" || args.some((a) => a && a.k === "null")) return NULL;
     if (callee.k === "partial") {
       return this.applyValue(callee.target, [...callee.args, ...args], env, callee.node || calleeNode);
+    }
+    if ((callee.k === "fn" || callee.k === "table" || callee.k === "typeAliasFn") && callee.sig) {
+      const n = callee.arity != null ? Math.min(args.length, callee.arity) : (callee.typeParams ? Math.min(args.length, callee.typeParams.length) : args.length);
+      if (n > 0 && !this.checkParamGuards(callee, args.slice(0, n), env)) return NULL;
     }
     const knownArity =
       callee.k === "builtin" || callee.k === "fn" || callee.k === "table" || callee.k === "typeAliasFn"
@@ -917,6 +1154,9 @@ class Evaluator {
     if (knownArity != null && args.length > knownArity) {
       const head = this.applyValue(callee, args.slice(0, knownArity), env, calleeNode);
       return this.applyValue(head, args.slice(knownArity), env);
+    }
+    if (knownArity != null && args.length === knownArity) {
+      if (!this.checkFunctionGuard(callee, args, env)) return NULL;
     }
 
     if (callee.k === "builtin") {
@@ -953,22 +1193,38 @@ class Evaluator {
       const e = new Env(best.cl.env);
       for (const [n, v] of best.binds) { const c = e.declare(n); c.value = v; c.set = true; }
       const rhs = best.cl.rhs;
-      if (rhs.k === "alias") return this.evalExpr(rhs.body, e);
-      // splat: bind the unmatched named parameters
-      if (table.sig) {
-        table.sig.params.forEach((p, i) => {
-          if (p && p.name && !best.matched.has(i) && !e.has(p.name)) {
-            const c = e.declare(p.name); c.value = prepared[i]; c.set = true;
-          }
-        });
+      const prevBody = this._inBody;
+      this._inBody = true;
+      try {
+        if (rhs.k === "alias") return this.evalExpr(rhs.body, e);
+        // splat: bind the unmatched named parameters
+        if (table.sig) {
+          table.sig.params.forEach((p, i) => {
+            if (p && p.name && !best.matched.has(i) && !e.has(p.name)) {
+              const c = e.declare(p.name); c.value = prepared[i]; c.set = true;
+            }
+          });
+        }
+        return this.evalSplat(rhs, e, table.sig, best.matched);
+      } finally {
+        this._inBody = prevBody;
       }
-      return this.evalSplat(rhs, e, table.sig, best.matched);
     }
     if (table.fallback) {
-      if (this.isCallable(table.fallback)) return this.applyValue(table.fallback, prepared, env);
+      if (this.isCallable(table.fallback)) {
+        const prevBody = this._inBody;
+        this._inBody = true;
+        try {
+          return this.applyValue(table.fallback, prepared, env);
+        } finally {
+          this._inBody = prevBody;
+        }
+      }
       fail(`'${table.name}' cannot be called`);
     }
-    fail(`no key matches the call to '${table.name}' and it has no body`);
+    const miss = new GuardMiss(`no key matches the call to '${table.name}' and it has no body`);
+    miss.direct = !this._inBody;
+    throw miss;
   }
 
   prepareArgs(sig, args) {
@@ -995,7 +1251,9 @@ class Evaluator {
         }
         if (p.k !== "param" || !p.type) continue;
         const t = this.evalTypeNode(p.type, cl.env, tenv);
-        if (!this.typeAccepts(t, args[i])) return { ok: false };
+        if (!this.typeAccepts(t, args[i])) {
+          fail(`expected ${this.displayType(t)}, got ${this.displayType(typeOf(args[i]))}`);
+        }
       }
       for (const [n, v] of tenv) {
         const tv = this.resolveVar(v);
@@ -1344,6 +1602,7 @@ class Evaluator {
   }
 
   checkRuntimeType(t, v, where = "") {
+    if (v && v.k === "null") return; // null is a bottom failure value
     t = this.resolveVar(t);
     if (!t) return;
     if (t.top || t.name === "?") return;
@@ -1390,6 +1649,7 @@ class Evaluator {
   }
 
   typeAccepts(t, v) {
+    if (v && v.k === "null") return true; // null is a bottom failure value
     t = this.resolveVar(t);
     if (!t) return true;
     if (t.top || t.name === "?") return true;
@@ -1430,6 +1690,7 @@ class Evaluator {
   // ---- records --------------------------------------------------------
 
   getField(rec, name) {
+    if (rec.k === "null") return NULL;
     if (rec.k !== "record") fail(`cannot select .${name} on ${this.display(rec)}`);
     if (rec.public && rec.public.size && !rec.public.has(name)) fail(`.'${name}' is not public`);
     const cell = rec.fields && rec.fields.get(name);
@@ -1450,33 +1711,22 @@ class Evaluator {
   // ---- operators ------------------------------------------------------
 
   evalBin(node, env) {
+    // `&&` and `||` are success/failure operators: null is failure, anything
+    // else is success. There is no boolean value involved.
     if (node.op === "&&") {
-      const l = this.asBool(this.evalExpr(node.l, env));
-      return l ? this.evalExpr(node.r, env) : vBool(false);
+      const l = this.evalExpr(node.l, env);
+      return this.isFailure(l) ? l : this.evalExpr(node.r, env);
     }
     if (node.op === "||") {
-      const l = this.asBool(this.evalExpr(node.l, env));
-      return l ? vBool(true) : this.evalExpr(node.r, env);
+      const l = this.evalExpr(node.l, env);
+      return this.isFailure(l) ? this.evalExpr(node.r, env) : l;
     }
-    const l = this.evalExpr(node.l, env);
-    const r = this.evalExpr(node.r, env);
     switch (node.op) {
-      case "==": return vBool(this.equal(l, r));
-      case "!=": return vBool(!this.equal(l, r));
-      case "<": case ">": case "<=": case ">=": {
-        const a = this.comparable(l), b = this.comparable(r);
-        if (node.op === "<") return vBool(a < b);
-        if (node.op === ">") return vBool(a > b);
-        if (node.op === "<=") return vBool(a <= b);
-        return vBool(a >= b);
-      }
+      case "==": case "!=":
+      case "<": case ">": case "<=": case ">=":
+        fail(`'${node.op}' is an assertion; comparisons are only allowed in guards`);
       default: fail(`unknown operator ${node.op}`);
     }
-  }
-
-  asBool(v) {
-    if (v.k !== "bool") fail(`expected a bool, got ${this.display(v)}`);
-    return v.v;
   }
 
   comparable(v) {
@@ -1488,14 +1738,17 @@ class Evaluator {
     if (a.k !== b.k) return false;
     switch (a.k) {
       case "num": case "str": case "bool": return a.v === b.v;
-      case "unit": return true;
+      case "unit": case "null": return true;
       case "type": return typeEq(a, b);
       default: return a === b;
     }
   }
 
   evalUn(node, env) {
-    if (node.op === "!") return vBool(!this.asBool(this.evalExpr(node.e, env)));
+    if (node.op === "!") {
+      const v = this.evalExpr(node.e, env);
+      return this.isFailure(v) ? UNIT : NULL;
+    }
     fail(`unknown prefix operator ${node.op}`);
   }
 }

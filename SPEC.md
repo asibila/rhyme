@@ -628,8 +628,8 @@ Holes this makes explicit:
     supersedes "ties are errors": a tie is just a missing intersection key.
     (`examples/21-keys-disambiguate.rhy`)
 24. There are **no arithmetic operators**. `+` and friends do not exist; a
-    program using one is rejected. Arithmetic, if needed, is a table
-    (`succ` in `examples/19`).
+    program using one is rejected. Arithmetic is builtin functions
+    (`add_int`/`add`, `sub_int`/`sub`) or a table (`succ` in `examples/19`).
 25. `to_string` is **not** the display. Display literals are not strings: they
     render. `to_string` produces a `string` value and is not total over `?`.
 26. Escaping in a template: a backslash escapes the next character, so `\\` is a
@@ -705,10 +705,13 @@ the gaps that were never asked are in §15, which supersedes the "none" above.
 * **Result shapes** bind one field per component: `(x: y: z:)` against
   `(int, int, int)`.
 * **Displays** are literal templates only; no computed table or function.
-* **Operators.** Precedence, tightest first: `f x` (application), `!`,
-  `< <= > >=`, `== !=`, `&&`, `||`. There is no arithmetic; `+` is rejected
-  (`test/reject/no-arithmetic.rhy`). (`examples/20-operators.rhy`,
-  `examples/22-escapes.rhy`)
+* **Operators.** Comparisons `< <= > >= == !=` are **guard assertions**, not
+  boolean values; outside a guard they are a type error. An assertion succeeds
+  with `()` and fails with `null`; `&&`, `||` and `!` combine those outcomes
+  and never inspect a `bool`. Guard precedence, tightest first: `f x`
+  (application), `!`, `< <= > >=`, `== !=`, `&&`, `||`. There is no arithmetic
+  operator; `+` is rejected (`test/reject/no-arithmetic.rhy`).
+  (`examples/20-operators.rhy`, `examples/22-escapes.rhy`)
 * **`to_string` vs display.** They are different pipelines: `to_string` yields a
   `string` value, display renders a template. Display literals are not strings.
 * **Holes.** A bare `\(name)` must resolve to a declared binder; a typed
@@ -743,9 +746,10 @@ marks a packed result (recommended), or `?` is context-dependent.
 constructors and records? Records hold closures, so structural equality needs a
 rule. Is equality builtin, or a table per type?
 
-**O3. `bool` and the logical operators.** `bool` is user-defined, yet `&&`, `||`,
-`!` must know it. Builtins over a primitive bool, tables, or special forms? Do
-`&&`/`||` short-circuit? (Expressions can have side effects.)
+**O3. `bool` and the logical operators.** Resolved in v4: `&&`, `||`, `!` do not
+know `bool` at all. They operate on success (`()`) and failure (`null`), and
+short-circuit left-to-right. `bool` is an ordinary type whose values are inert
+to the operators.
 
 **O4. Implicit type arguments.** `count: [rec [T:]] int` infers T from its
 argument. What is `count new_rec`, where T is unconstrained — default, `?`, or an
@@ -941,7 +945,11 @@ that actually arrive.
   is the fallback. Generic dispatch uses value shapes; dynamic dispatch uses `?`.
 * Records are by reference; display templates define the public fields.
 * Builtins: `to_string`, `print_int`/`print_float`/`print_bool` (return strings),
-  `add_int`/`add` (curried).
+  `add_int`/`add`, `sub_int`/`sub`, `mul_int`/`mul` (curried), and `null`.
+* Guards fail to `null`; `null` is absorbing through calls and `||`/`&&`/`!`
+  are success/failure operators (see §19).
+* Bare mode (`#!/bin/rhyme --bare`) has no `stdout` sink and returns the final
+  expression as the module value.
 
 Not implemented: a static checker, full type inference (holes are solved from
 runtime values), and all existential/type-level machinery. Removed forms are
@@ -1245,6 +1253,7 @@ v: int;                         # value, assigned later with $v =
 v: int => 0;                    # value with a default
 f: [x: int] int;                # function
 f: [x: int] int => ... x;       # function with a body
+f: [x: int] [y: int] int <- (x < y) => ... sub_int y x;  # function guard
 na: [@T] array @T => new_array; # parameterised default (type params only)
 g: [@T] [X: @T] @T;             # explicit type parameter + inferred value type
 p: [@T] `point-of-\(T)`;        # type constructor (display literal)
@@ -1269,8 +1278,8 @@ p: [@T] `point-of-\(T)`;        # type constructor (display literal)
 
 ### Bodies and definitions
 
-* `$name = e` assigns a declared value; a bare `name = e` is illegal. `<-` is
-  gone; `=` is the only binding/assignment token.
+* `$name = e` assigns a declared value; a bare `name = e` is illegal. `=` is the
+  binding/assignment token; `<-` is only a guard (parameter or function-level).
 * `name $keys = e` defines a clause. `$type_1 = …` / `$ctor = …` are illegal
   because display-literal names are constants.
 * Bodies are `... expr` and `... r: { … }`; `=> rhs` without `...` is a default.
@@ -1304,6 +1313,61 @@ $[X: T => ?]         # unpack a ? value as concrete T, bind X
   `$(type_1)` (a type test). `$(T => v)` is gone.
 * Headless narrowing uses a slot: `$[X: int => ?] = G;`.
 
+### Guards
+
+`<-` is a guard. In a **declaration parameter** it is a parameter precondition:
+
+```
+is_shape: [?];
+is_shape $[point];                         # unit entry in the table
+
+f: [arg: ? <- is_shape arg] int => ... 1;
+t: [@T <- is_shape T] int => ... 2;
+```
+
+A guard after the **result type** is a function-level precondition:
+
+```
+f: [x: int] [y: int] int <- (x < y)
+    => ... sub_int y x;
+```
+
+* Guards are declaration-level only: not on clauses or type/constructor fields.
+  A parameter guard is written inside `[...]`; a function-level guard follows
+  the result type.
+* A guard formula is assertions combined with `&&`, `||`, `!` (the usual
+  precedence and parentheses). An assertion is either a predicate call or a
+  comparison (`<`, `<=`, `>`, `>=`, `==`, `!=`).
+* A predicate is a unit-returning function or table. A table dispatch with no
+  key and no fallback is a **miss** = false; partial/arity/type/non-unit errors
+  abort.
+* A comparison succeeds with `()` or fails with `null` (a catchable miss).
+  Ordering compares two numbers or two strings; equality is value equality for
+  primitives and identity for records. Comparisons are only legal in guards;
+  outside one they are a type error, and there are no comparison values — only
+  success and failure.
+* A guard failure is **data**, not an abort: the call yields `null`. No clause
+  or whole-object fallback is tried, and the body does not run.
+* `null` is absorbing through calls: if any argument is `null`, the call is
+  `null`. It is also accepted by any parameter or result type (it is a bottom
+  failure value). `add 1 (fact 0)` is `null`, not a type error.
+* `&&`, `||` and `!` are **success/failure operators**, in guards and outside
+  them. Failure is `null`; anything else is success. `x || y` returns `x`
+  unless `x` is `null`, in which case it returns `y`; `x && y` returns `y`
+  unless `x` is `null`; `!x` is `()` when `x` is `null` and `null` otherwise.
+  They never inspect or produce a `bool`. Comparison against `null` is `==`
+  success / `!=` failure; ordering with a `null` operand is a failure.
+* `&&`/`||` short-circuit. A parameter guard runs when its parameter is
+  supplied; partial applications check only supplied parameters. Defaults fill
+  first, then the guard runs.
+* A function-level guard runs only on a full call, once all parameters are
+  bound, before the body. A failed function-level guard yields `null`.
+* A malformed guard is still a hard error: a predicate whose result is not
+  unit, an arity/type error, or a comparison of incomparable values. Only a
+  false assertion is soft.
+* Type parameters may be guarded (`[@T <- p T]`). Predicates are ordinary
+  first-class tables and can be passed (`[p: [?] ()]`).
+
 ### Dispatch
 
 * Type-directed dispatch uses a `?` parameter and an unpacking pattern:
@@ -1320,6 +1384,13 @@ $[X: T => ?]         # unpack a ? value as concrete T, bind X
   (`sum: int;`, `stdout: ?;`) narrows a sink.
 * Writes are a log rendered at the end in display form; strings keep quotes; an
   unassigned output writes nothing.
+* **Bare mode**: `#!/bin/rhyme --bare` declares no `stdout` sink. The module is
+  evaluated for its value and its final expression is the result
+  (`{ value, display, stdout: "", writes }`). `--output` sinks still work.
+  A bare file may use an anonymous function:
+  `[n: int] int => m: { $m = add n 1; };`; the value of the file is that
+  function. In a bare function, `=> r: { … }` is accepted as a short form of
+  `=> ... r: { … }`.
 
 ### Removed in v4
 
@@ -1329,6 +1400,7 @@ $[X: T => ?]         # unpack a ? value as concrete T, bind X
 | `$(T => v)` typed pattern | `$[X: T]` / `$[X: T => ?]` / `$(shape)` |
 | `name: => T` dynamic declaration | `name: ?;` |
 | `$[T] = e` cast | typed slot / unpacking pattern |
+| `name <- e` assignment | `name = e`; `<-` is a guard |
 | `F "bool"` in a type position | syntactic types only |
 | `(T => v)` packed value, `(=>)` | gone |
 | `unit` type name | `()` |
@@ -1337,11 +1409,13 @@ $[X: T => ?]         # unpack a ? value as concrete T, bind X
 ### Tests and corpus
 
 `test/run.mjs` parses `examples/` and `test/reject/`; `test/eval.mjs` executes
-the runnable examples. Examples 01–16, 19–32, 39–41 run; 17/18, 33–38 and 42 are
-deliberate runtime errors; the old dependent-type part of example 23 and the
-packed-pair experiments are legacy. `test/reject/` now also locks packed
+the runnable examples. Examples 01–16, 19–32, 39–41, 43, 44, 46, 47 and 49–52
+run; 17/18, 33–38, 42, 45 and 48 are deliberate errors; the old dependent-type
+part of example 23 and the packed-pair experiments are legacy. 44 and 47 show a
+failed guard yielding `null`; 50 is the factorial one-liner; 51 is bare mode;
+52 exercises null propagation and `||`. `test/reject/` now also locks packed
 parameters, typed patterns, dynamic declarations, empty slots, non-concrete
-unpacking, and unpack shapes.
+unpacking, unpack shapes, and misplaced/illegal guards.
 
 Migration from v3: `[T: ?]` → `[@T]`; `[n: ?]` used as a type → `[@T]`;
 `[=> ?]` → `[X: ?]`; `$(int => n:)` → `$[n: int => ?]` (on `?`) or

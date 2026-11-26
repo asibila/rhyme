@@ -1,7 +1,7 @@
 // Rhyme2 — lexer + parser for the surface grammar in SPEC.md.
 // This is deliberately syntax-only: it proves the grammar, not the semantics.
 
-const PUNCT2 = new Set(["=>", "&&", "||", "==", "!=", "<=", ">="]);
+const PUNCT2 = new Set(["<-", "=>", "&&", "||", "==", "!=", "<=", ">="]);
 const PUNCT1 = new Set("()[]{}:;,.$?!<>@=".split(""));
 
 export function lex(src) {
@@ -122,6 +122,9 @@ class Parser {
     if (this.atId() && this.peek(1).t === "sym" && this.peek(1).v === "$") {
       return this.parseDef();
     }
+    // A bare (anonymous) function: `[x: int] int => ...`. Only bare mode uses
+    // its value, but the syntax is valid anywhere an expression is.
+    if (this.at("[")) return { k: "expr", e: this.parseBareFn() };
 
     const e = this.parseExpr(false);
     if (this.at("=")) {
@@ -161,6 +164,7 @@ class Parser {
     // name: params `display`;                record type
     // name: params `display` => (ctors);     variant type
     if (this.peek().t === "lit") {
+      if (params.some((p) => p.guard)) this.err("guards are only allowed on function parameters");
       const display = this.t[this.i++].v;
       const holes = parseDisplayHoles(display);
       let ctors = null;
@@ -189,6 +193,7 @@ class Parser {
     // value: name: type [=> default];   (no parameter list)
     if (params.length === 0) {
       const result = this.at(";") || this.peek().t === "eof" ? { k: "unit" } : this.parseType();
+      if (this.at("<-")) this.err("a function-level guard requires parameters");
       let def = null;
       if (this.at("=>")) {
         this.nextSym();
@@ -200,8 +205,13 @@ class Parser {
         : { k: "ascribe", name, params, result, value: true };
     }
 
-    // function: name: {params} [result] [=> ... body | => default];
-    const result = this.at(";") || this.at("=>") ? { k: "unit" } : this.parseType();
+    // function: name: {params} [result] [<- guard] [=> ... body | => default];
+    const result = this.at(";") || this.at("=>") || this.at("<-") ? { k: "unit" } : this.parseType();
+    let guard = null;
+    if (this.at("<-")) {
+      this.nextSym();
+      guard = this.parseGuard();
+    }
     let body = null;
     let def = null;
     if (this.at("=>")) {
@@ -216,6 +226,7 @@ class Parser {
     }
     this.eat(";");
     const node = { k: "ascribe", name, params, result };
+    if (guard) node.guard = guard;
     if (body) node.body = body;
     if (def) node.default = def;
     return node;
@@ -234,8 +245,31 @@ class Parser {
       const body = this.parseExpr(false);
       return { k: "splat", result: null, body };
     }
+    // `=> r: { ... }` is accepted as the short form of `=> ... r: { ... }`.
+    if (this.atId() && this.peek(1).t === "sym" && this.peek(1).v === ":"
+        && this.peek(2).t === "sym" && this.peek(2).v === "{") {
+      const result = this.t[this.i++].v;
+      this.nextSym();
+      return { k: "splat", result, body: this.parseBlock() };
+    }
     if (this.at("{")) this.err('a block must be headed, e.g. "... r: { ... }"');
     return { k: "alias", body: this.parseExpr(false) };
+  }
+
+  parseBareFn() {
+    const params = [];
+    while (this.at("[")) params.push(this.parseParam());
+    const result = this.at("=>") || this.at("<-") ? { k: "unit" } : this.parseType();
+    let guard = null;
+    if (this.at("<-")) {
+      this.nextSym();
+      guard = this.parseGuard();
+    }
+    if (!this.at("=>")) this.err("expected '=>' in a bare function");
+    this.nextSym();
+    const body = this.parseBody();
+    this.eat(";");
+    return { k: "anonFn", params, result, guard, body };
   }
 
   parseCtors() {
@@ -258,6 +292,7 @@ class Parser {
       const p = this.parseParam();
       if (p) params.push(p);
     }
+    if (params.some((p) => p.guard)) this.err("guards are only allowed on function parameters");
     const display = this.expectKind("lit", "display literal");
     const holes = parseDisplayHoles(display);
     if (this.at("{")) {
@@ -411,15 +446,21 @@ class Parser {
     }
     if (this.at("=>")) this.err('the packed-pair parameter "[=> T]" is gone; write [X: ?]');
 
-    // [@T] / [@?] — a type argument
+    // [@T] / [@?] — a type argument (optionally guarded)
     if (this.at("@")) {
       this.nextSym();
       let name = null;
       if (this.atId()) name = this.t[this.i++].v;
       else if (this.eat("?")) name = null;
       else this.err('expected a name or "?" after "@"');
+      let guard = null;
+      if (this.at("<-")) {
+        if (pattern) this.err("guards are only allowed in declarations");
+        this.nextSym();
+        guard = this.parseGuard();
+      }
       this.expect("]");
-      return { k: "typeParam", name };
+      return { k: "typeParam", name, guard };
     }
 
     if (this.atId() && this.peek(1).t === "sym" && this.peek(1).v === ":") {
@@ -440,8 +481,14 @@ class Parser {
         this.expect("]");
         return { k: "unpack", name, type };
       }
+      let guard = null;
+      if (this.at("<-")) {
+        if (pattern) this.err("guards are only allowed in declarations");
+        this.nextSym();
+        guard = this.parseGuard();
+      }
       this.expect("]");
-      return { k: "param", name, type };
+      return { k: "param", name, type, guard };
     }
 
     const type = this.parseType();
@@ -453,8 +500,42 @@ class Parser {
       this.expect("]");
       return { k: "unpack", name: null, type };
     }
+    let guard = null;
+    if (this.at("<-")) {
+      if (pattern) this.err("guards are only allowed in declarations");
+      this.nextSym();
+      guard = this.parseGuard();
+    }
     this.expect("]");
-    return { k: "param", name: null, type };
+    return { k: "param", name: null, type, guard };
+  }
+
+  parseGuard() {
+    const e = this.parseExpr(false);
+    this.checkGuard(e);
+    return e;
+  }
+
+  checkGuard(node) {
+    switch (node.k) {
+      case "app":
+      case "namedApp":
+      case "name":
+        return;
+      case "bin":
+        if (node.op === "&&" || node.op === "||") {
+          this.checkGuard(node.l);
+          this.checkGuard(node.r);
+          return;
+        }
+        // Comparisons are assertions. Their operands are ordinary expressions.
+        if (["<", "<=", ">", ">=", "==", "!="].includes(node.op)) return;
+        break;
+      case "un":
+        if (node.op === "!") { this.checkGuard(node.e); return; }
+        break;
+    }
+    this.err("a guard may only contain assertions, predicate calls, &&, ||, !");
   }
 
   parseType() {
@@ -899,8 +980,17 @@ export function dump(node, depth = 0) {
         if (node.value) bits.push(`${pad}  value`);
         bits.push(one("result", node.result));
       }
+      if (node.guard) bits.push(one("guard", node.guard));
       if (node.body) bits.push(one("body", node.body));
       if (node.default) bits.push(one("default", node.default));
+      return bits.join("\n");
+    }
+    case "anonFn": {
+      const bits = [`${pad}bare fn`];
+      if (node.params && node.params.length) bits.push(one("params", node.params));
+      if (node.result) bits.push(one("result", node.result));
+      if (node.guard) bits.push(one("guard", node.guard));
+      bits.push(one("body", node.body));
       return bits.join("\n");
     }
     case "ctor": {
@@ -968,9 +1058,14 @@ export function dump(node, depth = 0) {
       const bits = [`${pad}param${node.name ? " " + node.name : ""}`];
       if (node.type) bits.push(go(node.type));
       else bits.push(`${pad}  <inferred>`);
+      if (node.guard) bits.push(one("guard", node.guard));
       return bits.join("\n");
     }
-    case "typeParam": return `${pad}type-param ${node.name ? "@" + node.name : "@?"}`;
+    case "typeParam": {
+      const bits = [`${pad}type-param ${node.name ? "@" + node.name : "@?"}`];
+      if (node.guard) bits.push(one("guard", node.guard));
+      return bits.join("\n");
+    }
     case "unpack": return `${pad}unpack${node.name ? " " + node.name : ""}: ${node.type ? typeText(node.type) : "?"}`;
     case "block": return one("block", node.stmts);
     case "expr": return one("expr", node.e);
