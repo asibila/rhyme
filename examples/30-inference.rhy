@@ -1,19 +1,19 @@
 # 30 — ? is any; @? infers; @T names the type
 
 F: @?;                     # local inference: the first assignment fixes it
-$F <- 123;
-$stdout <- F;              # 123
-# $F <- "abc";            # ILLEGAL: F is int
+$F = 123;
+$stdout = F;              # 123
+# $F = "abc";            # ILLEGAL: F is int
 
 D: ?;                      # dynamic: any value, any number of writes
-$D <- 123;
-$D <- "abc";
-$stdout <- D;              # "abc"
+$D = 123;
+$D = "abc";
+$stdout = D;              # "abc"
 
 G: [@T] int;               # one type argument
-G $[@T] <- 1;
-$stdout <- (G int);        # 1
+G $[@T] = 1;
+$stdout = (G int);        # 1
 
 H: [?] int;                # one dynamic value
-H $[n: int => ?] <- n;
-$stdout <- (H 5);          # 5
+H $[n: int => ?] = n;
+$stdout = (H 5);          # 5

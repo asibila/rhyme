@@ -10,28 +10,28 @@
 #   "one"
 
 F: [@T] string;
-$F <- ... "";
-F $[int] <- "int";
-F $[string] <- "string";
-$stdout <- (F int);                  # int
+$F = ... "";
+F $[int] = "int";
+F $[string] = "string";
+$stdout = (F int);                  # int
 
 G: [x: int] string;
-$G <- ... "";
-G $(1) <- "one";
-G $(2) <- "two";
-$stdout <- (G 2);                    # two
+$G = ... "";
+G $(1) = "one";
+G $(2) = "two";
+$stdout = (G 2);                    # two
 
 H: [X: ?] string;
-$H <- ... "";
-H $(1) <- "one";
-$stdout <- (H 1);                    # one
+$H = ... "";
+H $(1) = "one";
+$stdout = (H 1);                    # one
 
 # matching multiple arguments; a type argument and two values
 multi: [@A] [b: int] [c: int] string;
-$multi <- ... "";
+$multi = ... "";
 
 multi ${
-	$[int] <- A;
-	$[b: int] <- b;
-	$[c: int] <- c;
-} <- "";
+	$[int] = A;
+	$[b: int] = b;
+	$[c: int] = c;
+} = "";

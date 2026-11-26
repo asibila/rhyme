@@ -29,19 +29,19 @@ F: [int] [bool] string;   # F : int -> bool -> string   (curried)
 ## 2. Tables and rules
 
 ```
-$F <- [] "";              # root of F's key trie, default value ""
-F $[int] <- "int";        # depth-1 key: [int]  -> "int"
+$F = [] "";              # root of F's key trie, default value ""
+F $[int] = "int";        # depth-1 key: [int]  -> "int"
 ```
 
-* `<-` **defines** an entry; it does not overwrite.
+* `=` **defines** an entry; it does not overwrite.
 * `$X` is a **definition head**, not an expression. The store has no first-class
   name: `F` (unmarked) is the callable value, but `$F` cannot be passed, stored,
   or returned.
-* A key is a *path* of parameters: `F $[int] $[true] <- "x"` is depth 2.
+* A key is a *path* of parameters: `F $[int] $[true] = "x"` is depth 2.
 * `[]` is the empty path (depth 0) = the root.
 * The root's value is the fallback consulted when no key path matches.
-* Matching: **specificity and source order both matter.** `$F <- body` assigns
-  the *whole* object; `F $[int] <- ...` assigns *part* of it and shadows the
+* Matching: **specificity and source order both matter.** `$F = body` assigns
+  the *whole* object; `F $[int] = ...` assigns *part* of it and shadows the
   whole. Which of the two criteria wins when they disagree is Q3.
 
 ## 3. Patterns
@@ -50,33 +50,33 @@ A key is written in **pattern space**, and `$` is the marker for pattern space.
 It is mandatory, because a bare `count new_rec` would parse as an application:
 
 ```
-count $(new_rec) <- 0;                        # the value new_rec
-count $(unshift_rec $[X:] $[Y:]) <- ...;      # an application, two holes
-F $[int] <- "int";                            # one type slot
-G $(1) <- "one";                              # the literal 1
+count $(new_rec) = 0;                        # the value new_rec
+count $(unshift_rec $[X:] $[Y:]) = ...;      # an application, two holes
+F $[int] = "int";                            # one type slot
+G $(1) = "one";                              # the literal 1
 ```
 
 * `$(e)` quotes an expression as a pattern; `$[s]` quotes a single slot.
 * Quotation **nests**: the holes inside `$(...)` are themselves `$[...]`. A head
   may therefore contain several `$` — `count $(unshift_rec $[X:] $[Y:])` has
   three.
-* `$` occurs only left of `<-`, i.e. only in a head. So the real split is
+* `$` occurs only left of `=`, i.e. only in a head. So the real split is
   **head = pattern space, body = expression space**. The same construct is
   unmarked on the right: `[n:]` binds in a body, `$[X:]` binds in a key.
 * A definition is therefore an **expression**, not a statement form: because `$`
-  only ever sits left of `<-`, any `$... <- ...` is a definition wherever it
-  occurs — `print ($[int] <- n)` included. Parentheses are only grouping.
+  only ever sits left of `=`, any `$... = ...` is a definition wherever it
+  occurs — `print ($[int] = n)` included. Parentheses are only grouping.
 * The headless forms differ by what the key is:
-  `$[T] <- e` is a **cast** (give `e` the type `T`, yield the value);
-  `$(pattern) <- e` destructures; `$name <- e` assigns.
+  `$[T] = e` is a **cast** (give `e` the type `T`, yield the value);
+  `$(pattern) = e` destructures; `$name = e` assigns.
 * Patterns never appear in an expression, so there is no anonymous match: to
   dispatch, a table must be named first, then extended or called.
 
 | head | introduces |
 | --- | --- |
-| `$F <- ...` | `F`'s definition (no key) |
-| `F $[int] <- ...` | one entry at `F`'s key |
-| `count $(new_rec) <- ...` | one entry at a value-pattern key |
+| `$F = ...` | `F`'s definition (no key) |
+| `F $[int] = ...` | one entry at `F`'s key |
+| `count $(new_rec) = ...` | one entry at a value-pattern key |
 
 Pattern forms:
 
@@ -112,13 +112,13 @@ So `F: [T: ?] int` takes a type and returns `int`, and in
 
 ```
 F: [int] string;
-$F <- [n:] to_string n;
+$F = [n:] to_string n;
 ```
 
 the `[n:]` is elaborated to `int` from the declaration — the definition site
 need not repeat what the ascription already says.
 
-Likewise `F: [?] string; F $[int] <- "int";` is *type* dispatch: `F int` passes
+Likewise `F: [?] string; F $[int] = "int";` is *type* dispatch: `F int` passes
 the type `int` as a type argument, not a value of type `int`.
 
 `[=> ?]` **[?]** reads as the anonymous dependent pair — sugar for
@@ -129,7 +129,7 @@ form, and `H 1` wraps `1` as `(int => 1)` before matching.
 
 ```
 func: [int] [int] (int, int, int);
-func $(1) $(2) <- (10, 20, 30);
+func $(1) $(2) = (10, 20, 30);
 ```
 
 * `(t, t, ...)` is a positional **product type**, and `(e, e, ...)` is a value
@@ -201,7 +201,7 @@ rec: [T: ?] `` => (
 
   ```
   new_var: `new_var-\(value:int)-\(assign_value:[int]())` {
-      $value <- 0;
+      $value = 0;
       ...
   };
   ```
@@ -227,7 +227,7 @@ rec: [T: ?] `` => (
 ```
 #!/bin/rhyme
 (n:int) {
-   $n <- 123;
+   $n = 123;
 };
 ```
 ```
@@ -243,7 +243,7 @@ rec: [T: ?] `` => (
 * Body is either a bare expression (`123`, `"abc"`) or a block
   `(n:int) { ... }` whose parenthesised head is a **declaration list** (7.3) and
   whose body defines those names.
-* `$n <- 123` is `$F <- [] ""` with the path omitted, so **the omitted path is
+* `$n = 123` is `$F = [] ""` with the path omitted, so **the omitted path is
   the empty path**: it defines the root of `n`.
 * The main module's result is rendered at the terminal:
   `123` -> `123`, `"abc"` -> `"abc"` (quotes kept), `true` -> `T`.
@@ -252,17 +252,17 @@ rec: [T: ?] `` => (
 
 ```
 F: [int] string;              # ascription: F : int -> string
-$F <- [n:] to_string n;       # definition: F's body
+$F = [n:] to_string n;       # definition: F's body
 ```
 
 * `:` **ascribes**: `name : type`, never destructures. Destructuring is a
   `$`-pattern binding with the tuple spelled out:
-  `$(a:, b:, c:) <- func $(1) $(2);` (Q30 answered). `$name <-` is the value
+  `$(a:, b:, c:) = func $(1) $(2);` (Q30 answered). `$name =` is the value
   form.
-* `(n:int) { $n <- 123; }` is then: `n` is annotated `int` in the interface and
+* `(n:int) { $n = 123; }` is then: `n` is annotated `int` in the interface and
   given a value in the body.
-* `$` marks the binding being **introduced**: `$F <- ...` introduces the name's
-  first definition; `F $[int] <- ...` introduces one key under an already
+* `$` marks the binding being **introduced**: `$F = ...` introduces the name's
+  first definition; `F $[int] = ...` introduces one key under an already
   declared name. Either way it is the new part that carries the `$`.
 * A bracket is one **argument slot** in every context: a parameter in a
   declaration, a type argument in an application (`rec [T:]`), a sub-pattern in
@@ -277,10 +277,10 @@ $F <- [n:] to_string n;       # definition: F's body
 
   | form | binds / filters |
   | --- | --- |
-  | `$F <- [] expr` | empty parameter list |
-  | `$F <- [n:] expr` | one argument, no filter |
-  | `$F <- [n:] [m:] expr` | two arguments, one bracket each |
-  | `F $[int] <- expr` | no binding; filters the argument |
+  | `$F = [] expr` | empty parameter list |
+  | `$F = [n:] expr` | one argument, no filter |
+  | `$F = [n:] [m:] expr` | two arguments, one bracket each |
+  | `F $[int] = expr` | no binding; filters the argument |
 
 * `to_string` converts a value to a **string value**, which is not its display.
   Display literals are not strings, and `to_string` never produces one
@@ -290,8 +290,8 @@ $F <- [n:] to_string n;       # definition: F's body
 
 ```
 count: [rec [T:]] int;
-count $(new_rec) <- 0;
-count $(unshift_rec $[X:] $[Y:]) <- 1 + count (Y);
+count $(new_rec) = 0;
+count $(unshift_rec $[X:] $[Y:]) = 1 + count (Y);
 ```
 
 * A function is a set of clauses sharing a name; each key is a pattern at the
@@ -315,44 +315,44 @@ count $(unshift_rec $[X:] $[Y:]) <- 1 + count (Y);
 point: `point` => ( new_point: [int] [int] `point`; );
 
 get_point: point;
-$get_point <- new_point 10 20;
-$(new_point $[X:] $[Y:]) <- get_point;
+$get_point = new_point 10 20;
+$(new_point $[X:] $[Y:]) = get_point;
 print (X + Y);          # 30
 ```
 
-* `<-` binds a **pattern** to an expression, uniformly. A name binding
-  (`$get_point <- e`) is the degenerate case; an application pattern
-  (`count $(new_rec) <- 0`) is a clause. Nothing distinguishes a "clause" from a
+* `=` binds a **pattern** to an expression, uniformly. A name binding
+  (`$get_point = e`) is the degenerate case; an application pattern
+  (`count $(new_rec) = 0`) is a clause. Nothing distinguishes a "clause" from a
   "definition" except whether the pattern applies a name.
-* The third line has no head at all: `$(new_point $[X:] $[Y:]) <- get_point`
+* The third line has no head at all: `$(new_point $[X:] $[Y:]) = get_point`
   introduces `X` and `Y` into the enclosing scope. So patterns are **statement
   level**, not confined to clause heads — which corrects §3's "patterns only in
   heads". They are still not expressions: there is no `match` value.
-* `:` and `<-` are complementary rather than alternative: `get_point: point;`
-  ascribes, `$get_point <- ...` supplies the value. Which is also why
+* `:` and `=` are complementary rather than alternative: `get_point: point;`
+  ascribes, `$get_point = ...` supplies the value. Which is also why
   `a, b, c: func 1 2;` is awkward (Q30).
 
 ### 7.3 Blocks and scope
 
 ```
 func_1: [int] int;
-$func_1 <- [var_1:] (n:) {
-	$var_1 <- 123;
-	$n <- 123;
+$func_1 = [var_1:] (n:) {
+	$var_1 = 123;
+	$n = 123;
 };
 
 var_1: int;
-$var_1 <- 222;
+$var_1 = 222;
 print (func_1 var_1);                   # 123
 print (var_1);                          # 222
 ```
 
 * A block is `(decls) { defs }`: the **parens are a declaration list**, the same
-  shape as a module header, and the body supplies values with `$... <-`.
+  shape as a module header, and the body supplies values with `$... =`.
   Brackets are curried parameter binders. So a definition can be
-  `$name <- {bracket binder} (block)`.
-* `$var_1 <- 123` inside the block does **not** reach the outer `var_1`: the last
-  line still prints `222`. So `<-` introduces a scope-relative binding — global
+  `$name = {bracket binder} (block)`.
+* `$var_1 = 123` inside the block does **not** reach the outer `var_1`: the last
+  line still prints `222`. So `=` introduces a scope-relative binding — global
   at top level, local inside a block — and shadowing is lexical.
 * The example cannot say which of `[var_1:]` and `(n:)` carries the argument, nor
   what the block returns, because every value is `123` (Q34–Q35).
@@ -371,23 +371,23 @@ filled.
 | `new_var` | an instance of `var` |
 | `(n:int)` | a one-field record named `n` (a module's export) |
 
-* So `$replace_and_return_old <- [v:] (res:) { ... }` assigns a **function
+* So `$replace_and_return_old = [v:] (res:) { ... }` assigns a **function
   value**: brackets are input, the parens are the result shape, braces fill it.
 * `name: [in] out;` ascribes. `name: [in] out { ... }` ascribes and defines in one
-  step. `$name <- [in-names] (out-names) { ... }` does the same in two. That
+  step. `$name = [in-names] (out-names) { ... }` does the same in two. That
   resolves the earlier `apply_123:` line: it is the compact form.
 * Result names elaborate from the declared result type exactly like parameters:
   `(res:)` against `int`, `()` against `()`, `(x: y: z:)` against
   `(int, int, int)`.
-* Inside the braces, filling a declared result slot is `$res <- v.value`. Every
-  name or pattern target of `<-` carries `$`; only projections are bare (§7.5).
+* Inside the braces, filling a declared result slot is `$res = v.value`. Every
+  name or pattern target of `=` carries `$`; only projections are bare (§7.5).
 
 ### 7.5 Records, projection, mutation
 
 ```
 var: `var` => new_var: `new_var-\(value:int)-\(assign_value:[int]())` {
-	$value <- 0;
-	$assign_value <- [x:] () { $value <- x };
+	$value = 0;
+	$assign_value = [x:] () { $value = x };
 };
 ```
 
@@ -395,17 +395,17 @@ var: `var` => new_var: `new_var-\(value:int)-\(assign_value:[int]())` {
   template's holes; its body supplies their values.
 * `.` projects: `v.value`, `v.assign_value`. Applying a projected function is a
   method call: `v.assign_value 123`.
-* `<-` on a projection assigns: `V1.value <- 1000`.
-* That gives two lvalue forms and no third: `$target <- e` where the target is a
-  name or a pattern, and `path.field <- e` where the target is a projection. The
+* `=` on a projection assigns: `V1.value = 1000`.
+* That gives two lvalue forms and no third: `$target = e` where the target is a
+  name or a pattern, and `path.field = e` where the target is a projection. The
   dot path takes no `$` because it is an *expression*, not a pattern; `:`
   targets never take `$` at all. So the head grammar is: `:` declares bare,
-  `$... <-` assigns marked, `expr.field <-` mutates through a path.
-* The nested `[x:] () { $value <- x }` closes over the instance's `value`, so the
+  `$... =` assigns marked, `expr.field =` mutates through a path.
+* The nested `[x:] () { $value = x }` closes over the instance's `value`, so the
   field and the closure share one cell. Each `new_var` therefore gets its own:
   the first `replace_and_return_old V1` reads `1000` and writes `123`, the second
   reads `123`.
-* A constructor with no parameters is a value (`$V1 <- new_var`), not a call.`
+* A constructor with no parameters is a value (`$V1 = new_var`), not a call.`
 
 ## 8. Open questions
 
@@ -442,10 +442,10 @@ var: `var` => new_var: `new_var-\(value:int)-\(assign_value:[int]())` {
 13. **`print` vs. boundary rendering.** Turn 1 had `print (F int)`. Now rendering
     is what happens when a module's result hits the terminal. Two mechanisms, or
     is `print` the same projection exposed mid-computation?
-14. **What is a module's value?** For `(n:int) { $n <- 123; }` — is the result
+14. **What is a module's value?** For `(n:int) { $n = 123; }` — is the result
     `123`, the block's store, or a function awaiting `n`? Correspondingly, is
     `(n:int)` an input signature (script argument), a pattern, or an exported
-    interface? Can the caller override the `$n <- 123` binding?
+    interface? Can the caller override the `$n = 123` binding?
 15. **Module references.** Not shown: how one module names another (import,
     path, or a default resolution rule). Also, does a non-main module ever
     render, or only the entry point?
@@ -453,11 +453,11 @@ var: `var` => new_var: `new_var-\(value:int)-\(assign_value:[int]())` {
 ## 10. Questions raised by binders
 
 16. **`[]` vs `[n:]`.** If `[]` is a genuine empty binder list, then
-    `$G <- [] ""` makes `G` a constant, not a function — contradicting
+    `$G = [] ""` makes `G` a constant, not a function — contradicting
     `G: [int] string`. Leading hypothesis: `[]` means "matches any remaining
     path", i.e. a catch-all, so it is *not* arity 0. Confirm.
-17. **Bodies vs. cases.** `$F <- [n:] ...` matches every argument, so if
-    source order decided, it would shadow `F $[int] <- "int"`. Is a body
+17. **Bodies vs. cases.** `$F = [n:] ...` matches every argument, so if
+    source order decided, it would shadow `F $[int] = "int"`. Is a body
     always the last branch tried, or is matching by specificity?
 18. Is `[n:]` accepted as shorthand only where the declaration supplies a type
     (i.e. does it ever default to `?`)? And is `[T:]` legal, inferring `?`?
@@ -467,8 +467,8 @@ var: `var` => new_var: `new_var-\(value:int)-\(assign_value:[int]())` {
 20. Does `to_string` equal the backtick display and accept any `?`? What is
     `to_string` of a value whose type has no display — error, or fallback?
     Suggested signature if it is generic: `[T: ?] [n:T] string`.
-21. Does `$F <- ...` *replace* F's store or add an entry (the root)? Can a
-    file contain both `$F <- [n:] ...` and `F $[int] <- ...` without clobbering?
+21. Does `$F = ...` *replace* F's store or add an entry (the root)? Can a
+    file contain both `$F = [n:] ...` and `F $[int] = ...` without clobbering?
 22. Is `[=> ?]` literally sugar for `[T: ?] [n:T]`? If so, is `[T: ?] [n:T]`
     also legal in a *declaration*, and is `(t => v)` the only pair form?
 23. Does empty `` `` `` on a constructor mean "render the fields" (structural),
@@ -489,7 +489,7 @@ var: `var` => new_var: `new_var-\(value:int)-\(assign_value:[int]())` {
 30. Is `:` one operator (bind a pattern to an expression, ascription being the
     case where the RHS is a type) or two (ascription vs destructuring)?
     `get_point: point` is clearly ascription; `a, b, c: func 1 2` is clearly not.
-31. Is `<-` uniformly "bind pattern to expression", with clauses as application
+31. Is `=` uniformly "bind pattern to expression", with clauses as application
     patterns? Then `a, b, c` and `$(new_point $[X:] $[Y:])` are statement-level
     bindings, and `$` is needed only where the left side would parse as a call.
 32. `new_point` has two fields and displays `` `point` ``, so templates do not
@@ -498,24 +498,24 @@ var: `var` => new_var: `new_var-\(value:int)-\(assign_value:[int]())` {
 33. `point` displays as `point` at both the type and constructor level, i.e. it
     is opaque. Is that intentional as a way to seal a representation?
 34. Which of `[var_1:]` and `(n:)` binds the argument? Both are `int` here, so
-    the example is silent. `$var_1 <- 1; $n <- 2;` would distinguish them.
+    the example is silent. `$var_1 = 1; $n = 2;` would distinguish them.
 35. What is a block's value — its last statement, the last declared name, or a
     record of its declarations? `func_1` must return an `int`, which rules out
     the record reading unless a block of one name is special.
-36. Is `<-` inside a block a rebinding (shadowing) or an assignment to the
+36. Is `=` inside a block a rebinding (shadowing) or an assignment to the
     already-declared slot? `222` only proves the *outer* name is untouched.
-37. Resolved by the `$res <- v.value` fix: every name or pattern target of `<-`
+37. Resolved by the `$res = v.value` fix: every name or pattern target of `=`
     carries `$`, and only projections are bare. Open: may the projection target
-    be an arbitrary path (`(f x).field <- v`), and is `$V1.value <- 1000` an
+    be an arbitrary path (`(f x).field = v`), and is `$V1.value = 1000` an
     error?
 38. Does `\(name:type)` *declare* a field, or interpolate a variable that must
     already exist? `new_var` defines both, so either reading fits.
 39. Is each `new_var` a fresh cell, or do instances share `value`? The two prints
     prove per-instance behaviour for one `V1` only.
 40. Is `name: [in] out { body }` equivalent to `name: [in] out;` plus
-    `$name <- [x:] (res:) { body }`, or does the one-step form mean something
+    `$name = [x:] (res:) { body }`, or does the one-step form mean something
     else?
-41. Constructor-as-value (`$V1 <- new_var`) vs constructor-as-function
+41. Constructor-as-value (`$V1 = new_var`) vs constructor-as-function
     (`new_point 10 20`): is a nullary constructor a record or a thunk?
 
 ## 11. Surface grammar (draft)
@@ -535,8 +535,8 @@ stmt        = ascription | definition | expr , ";" ;
 ascription  = name , ":" , signature , ";" ;
 signature   = { param } , type                                (* function type *)
             | { param } , display , "=>" , "(" , { ctor } , ")" ;  (* type def *)
-definition  = head , "<-" , rhs , ";" ;
-defn        = "$" , ( name | key , { key } ) , "<-" , rhs ;  (* an expression too *)
+definition  = head , "=" , rhs , ";" ;
+defn        = "$" , ( name | key , { key } ) , "=" , rhs ;  (* an expression too *)
 
 head        = "$" , name                                       (* introduces name *)
             | name , key , { key } ;                           (* introduces one key *)
@@ -565,31 +565,31 @@ Holes this makes explicit:
    `=>` has to be a type former (`t => v`), not just declaration punctuation.
    Same conclusion as Q9, now forced by the grammar.
 3. `expr` is barely constrained: atoms, juxtaposition for application, infix
-   `=>` for typed values, `.` projection and `+`. A `$... <- ...` is an
-   expression as well, so `print ($[int] <- n)` parses.
+   `=>` for typed values, `.` projection and `+`. A `$... = ...` is an
+   expression as well, so `print ($[int] = n)` parses.
 4. `rhs` reads `[]` as one unit slot. Arity 0 is written with no brackets at
    all.
 
 ## 12. Answers from the author
 
-1. Keys are always `$`-quoted, one per slot: `func $(1) $(2) <- ...`.
+1. Keys are always `$`-quoted, one per slot: `func $(1) $(2) = ...`.
 2. Slot rule: a **type** slot (declared `?`) takes `$[typeExpr]`; a **value**
    slot takes `$[name:]` to bind or `$(expr)` to match a value.
-3. ~~`$G <- [] ""`~~ — superseded by the arity rule (answer 18). Against
-   `G: [int] string` the body must be `$G <- [x:] ""`; `[]` is a unit slot, not
+3. ~~`$G = [] ""`~~ — superseded by the arity rule (answer 18). Against
+   `G: [int] string` the body must be `$G = [x:] ""`; `[]` is a unit slot, not
    zero.
-4. Specificity and source order both matter. `$F <- body` assigns the whole
-   object; `F $[int] <- ...` assigns part of it.
-5. A `$`-assignment target must already be declared (`x: T;` before `$x <- v`).
+4. Specificity and source order both matter. `$F = body` assigns the whole
+   object; `F $[int] = ...` assigns part of it.
+5. A `$`-assignment target must already be declared (`x: T;` before `$x = v`).
    Declarations have no default value and must be assigned before they are read.
 6. Every construction gets fresh state; `var_id` is a module-level counter.
-7. `:` is ascription only; destructuring is `$(a:, b:, c:) <- ...`.
+7. `:` is ascription only; destructuring is `$(a:, b:, c:) = ...`.
 8. `=>` has three shapes: labeled pair (non-literal LHS), definition (literal
    LHS), unary prefix (no LHS, as in `[=> ?]`).
 9. An empty display renders no text.
 10. Printing is a **directive**: `\print (e);` writes `e` to the screen (strings
     bare). `to_string` returns a display string. There is no `print` function.
-11. A headless `$[T] <- e` in expression position is a **cast**: it gives `e`
+11. A headless `$[T] = e` in expression position is a **cast**: it gives `e`
     the type `T` and yields the value.
 12. Display holes: `\(name)` references a binder; `\(name:type)` declares one.
 13. `[]` is one parameter of type **unit**, so `f: [];` is called `f ()`.
@@ -597,14 +597,14 @@ Holes this makes explicit:
     elided result is **deduced** from the body; write `()` for unit. (Superseded
     by §17; the old “elided = unit” rule is retired.) Binders in a declaration
     (`[n:]`) are placeholders whose types are deduced from the definition.
-14. A cast is **unification**: `$[T] <- e` needs the static type of `e` to unify
+14. A cast is **unification**: `$[T] = e` needs the static type of `e` to unify
     with `T`; an unknown `?` does not, so it is a compile error.
-    `$(T => ?) <- e` is the runtime-checked form — accepted, may fail at run
+    `$(T => ?) = e` is the runtime-checked form — accepted, may fail at run
     time.
 15. A definition in expression position yields `v`.
 16. Constructors may have parameters *and* a body. Template holes declare
     fields; the body only assigns them.
-17. A whole-object body is **required**: `$F <- ...` must exist. It is the
+17. A whole-object body is **required**: `$F = ...` must exist. It is the
     fallback at any depth, including after a partial match, so a miss never
     fails at run time. Keys only refine it; a definition with keys but no body
     is a compile error (`$H has not been assigned`). (`examples/18-miss.rhy`)
@@ -617,7 +617,7 @@ Holes this makes explicit:
 20. A declaration made only of placeholders must be resolved by a definition in
     the same module; it cannot stand alone.
 21. `name: => value` declares the name *and* initialises it, with the type
-    inferred. `:` still introduces the name and `$name <- value` still requires
+    inferred. `:` still introduces the name and `$name = value` still requires
     it to exist already, so answer 7 stands: ascription is `name: type`,
     initialisation has its own arrow.
 22. The display template is the **public interface**: a field declared in the
@@ -657,15 +657,15 @@ node bin/rhyme.mjs --dump f.rhyme
 
 Two rules the parser has to enforce, both settled by the answers:
 
-1. **Keys are always `$`-quoted, one per slot.** `func $(1) $(2) <- ...` parses;
-   `func 1 2 <- ...` is a syntax error, kept as a `test/reject` case so it cannot
+1. **Keys are always `$`-quoted, one per slot.** `func $(1) $(2) = ...` parses;
+   `func 1 2 = ...` is a syntax error, kept as a `test/reject` case so it cannot
    silently regress.
-2. **A bare expression head must be a projection.** `V1.value <- 1000` parses;
-   any other non-`$` head is an error. So `<-` assigns only to a `$`-name, a
+2. **A bare expression head must be a projection.** `V1.value = 1000` parses;
+   any other non-`$` head is an error. So `=` assigns only to a `$`-name, a
    `$`-pattern, or a field path.
 
 Also enforced: `:` is ascription only, so destructuring must be written
-`$(a:, b:, c:) <- ...`. Display holes are parsed into `{name, type}`; a bare
+`$(a:, b:, c:) = ...`. Display holes are parsed into `{name, type}`; a bare
 hole is not yet checked against the binders in scope.
 
 ## 14. Still open
@@ -675,8 +675,8 @@ the gaps that were never asked are in §15, which supersedes the "none" above.
 
 ### Settled
 
-* A cast is **unification**: `$[T] <- e` needs the static type of `e` to unify
-  with `T`, so an unknown `?` is a compile error. `$(T => ?) <- e` is the
+* A cast is **unification**: `$[T] = e` needs the static type of `e` to unify
+  with `T`, so an unknown `?` is a compile error. `$(T => ?) = e` is the
   runtime-checked form: accepted, may fail at run time.
   (`examples/17-cast-unification.rhy`)
 * A definition in expression position yields `v`.
@@ -695,7 +695,7 @@ the gaps that were never asked are in §15, which supersedes the "none" above.
 * **Placeholders.** A placeholder-only declaration cannot stand alone; a
   definition in the same module must resolve it.
 * **Initialisation.** `name: => value` declares and initialises in one step, with
-  the type inferred; `$name <- value` still requires a prior declaration.
+  the type inferred; `$name = value` still requires a prior declaration.
   (`examples/19-counter.rhy`)
 * **Key conflicts.** Overlapping keys are allowed only if the overlap is itself a
   key; the compiler rejects the program otherwise. At run time the unique
@@ -751,7 +751,7 @@ rule. Is equality builtin, or a table per type?
 argument. What is `count new_rec`, where T is unconstrained — default, `?`, or an
 error? Can `id: [T: ?] [T] T` be written?
 
-**O5. Existential unpacking.** Can `$(t => v) <- pair` bind a *type* `t` into
+**O5. Existential unpacking.** Can `$(t => v) = pair` bind a *type* `t` into
 scope, and can that `t` then be used as a type?
 
 **O6. Pair types.** Is `(int => 1)`'s type `int => int` (a specific labeled
@@ -770,7 +770,7 @@ type has no written name, so it cannot be a parameter. Is that type anonymous an
 structural, or does `new_counter` also name a type? This decides whether objects
 can be passed around.
 
-**O9. Reference vs value.** Is a record passed by reference? Does `$V2 <- V1`
+**O9. Reference vs value.** Is a record passed by reference? Does `$V2 = V1`
 alias? `replace_and_return_old V1` mutates through `v`, but a shallow copy that
 shares the cell would look identical.
 
@@ -839,14 +839,14 @@ and a checker that can diverge on a type annotation.
 builtin? In particular:
 * Is `bool` builtin, making `bool: … => (false: …; true: …)` a *display
   override* rather than a new type?
-* Is `void` both a type and its sole value? (`$H <- [n:] void` returns `void` as
+* Is `void` both a type and its sole value? (`$H = [n:] void` returns `void` as
   a default result.)
 
 **O21. Higher-kinded type values.** `key: [[?]?]?;` accepts a `Type -> Type`
 constructor, and `array`/`dict` are used that way. Is the type language
 higher-kinded, and how is a kind other than `?` written?
 
-**O22. Type binders in keys.** `key $[dict $[k:]] <- k;` binds a *type* `k` in a
+**O22. Type binders in keys.** `key $[dict $[k:]] = k;` binds a *type* `k` in a
 pattern and returns it from the body. `examples/26` shows the same for `fmap`:
 `$[T:] $[U:]` bind the caller's type arguments and the recursive call passes them
 on. Does that unpack an existential (see O5), and may a body return a type as an
@@ -878,7 +878,7 @@ every value tagged, or is packing done only at `=>` boundaries — `G 123` becom
 `(int => 123)` at the call?
 
 **O28. Where packing happens.** Which boundaries auto-pack: arguments to a
-`[=> ?]` parameter, returns from a `=>` signature, casts (`$[T] <- e`)? And does
+`[=> ?]` parameter, returns from a `=>` signature, casts (`$[T] = e`)? And does
 a `?`-returning function return a *type* or a packed value (O1)?
 
 **O29. Overlap checking.** What exactly is verified for disambiguation, and is it
@@ -890,10 +890,10 @@ key shadow a field, a parameter, or another key's binder?
 
 **O31. Initialisation order.** Are top-level definitions hoisted (so mutual
 recursion works) or evaluated top-to-bottom (so order matters for side effects,
-as in `$counter_id <- succ counter_id`)? Can a definition use a name declared
+as in `$counter_id = succ counter_id`)? Can a definition use a name declared
 later?
 
-**O32. Module head: input or result?** `(n:int) { $n <- 123; }` reads equally as
+**O32. Module head: input or result?** `(n:int) { $n = 123; }` reads equally as
 an input supplied by the runtime or a result declaration filled by the body.
 Which is it? If input, where do the values come from?
 
@@ -958,7 +958,7 @@ implicit `self`, and a directive may rename it.
 
 ```
 #!/bin/rhyme
-$self <- 123;
+$self = 123;
 ```
 
 ### Bodies and `{ }`
@@ -967,15 +967,15 @@ $self <- 123;
 
 | position | role | rules |
 | --- | --- | --- |
-| after `=>`, after `<-`, after `[x:]` | **body** | params in scope by name; `self` pre-bound; result is the final `self` |
-| after an expression | **application** | `$param <- expr` entries, evaluated in order, each seeing earlier ones; binds all remaining parameters; fires at `}`; may follow a partial; at most one brace |
-| `${ … }` in a clause head | **key group** | `pattern <- parameterName`; order-free; omitted = unconstrained |
+| after `=>`, after `=`, after `[x:]` | **body** | params in scope by name; `self` pre-bound; result is the final `self` |
+| after an expression | **application** | `$param = expr` entries, evaluated in order, each seeing earlier ones; binds all remaining parameters; fires at `}`; may follow a partial; at most one brace |
+| `${ … }` in a clause head | **key group** | `pattern = parameterName`; order-free; omitted = unconstrained |
 
 ### `self` and directives
 
 * `self` is an ordinary variable, pre-bound in every body and module:
 
-  * `self` reads it; `$self <- e` replaces it; `$self.f <- e` sets a field;
+  * `self` reads it; `$self = e` replaces it; `$self.f = e` sets a field;
   * record result: pre-created with declared fields, unset until assigned;
     scalar result: unset; unit result: `()`;
   * rebinding within one brace is allowed, last write wins.
@@ -985,8 +985,8 @@ A directive renames the current body's `self`:
 ```
 new_var: [] var => {
     \self (inst);
-    $inst.value <- 0;
-    $inst.assign_value <- [x:] { $self <- (); $inst.value <- x };
+    $inst.value = 0;
+    $inst.assign_value = [x:] { $self = (); $inst.value = x };
 };
 ```
 
@@ -1010,9 +1010,9 @@ f: [a: int] [b: int] R;            # declare only
 ```
 f 1 2                          # positional, still valid
 add_int 1000                   # partial, still valid
-add_int 1000 { $b <- 2 }       # partial, finished by a brace
-f { $a <- 1; $b <- 2 }         # named
-point { $first <- 1; $second <- 2 }
+add_int 1000 { $b = 2 }       # partial, finished by a brace
+f { $a = 1; $b = 2 }         # named
+point { $first = 1; $second = 2 }
 ```
 
 No chained braces.
@@ -1020,8 +1020,8 @@ No chained braces.
 ### Keys
 
 ```
-f $[int] $(1) <- v                    # positional, kept
-f ${ $[int] <- A; $(1) <- B } <- v    # group; names are parameter names
+f $[int] $(1) = v                    # positional, kept
+f ${ $[int] = A; $(1) = B } = v    # group; names are parameter names
 ```
 
 Positional keys and groups may be mixed in one clause. A clause containing any
@@ -1046,7 +1046,7 @@ supplied arguments' types with the declared parameter types. Value parameters
 are never deduced; unsolved or ambiguous is an error.
 
 ```
-fmap { $arg <- R; $func <- add_int 1000 }      # C=rec, T=int, U=int
+fmap { $arg = R; $func = add_int 1000 }      # C=rec, T=int, U=int
 ```
 
 Implemented: the evaluator unifies each declared parameter type against the
@@ -1082,15 +1082,15 @@ v2 is recorded here only for history; `src/` now implements v4 (§19). `test/rej
 | examples | change |
 | --- | --- |
 | 01–06, 13, 17, 18, 20–23, 25, 26 | unchanged |
-| 07 | `$func_1 <- [var_1:] (n:) { … }` → `func_1: [var_1: int] int => { $var_1 <- 123; $self <- 123; }` |
-| 08 | drop `()` shapes, add `=>`: `$assign_value <- [n:] { $value <- n }`, `apply_123: [F: [int]()] () => { F 123; }` |
-| 09 | `var` becomes a record type plus `new_var` with `\self (inst)`; `(res:)` → `$self <- v.value` |
-| 10, 11 | `123` / `"abc"` → `$self <- 123;` / `$self <- "abc";` |
-| 12 | `(n:int) { $n <- 123; }` → `$self <- 123;` |
+| 07 | `$func_1 = [var_1:] (n:) { … }` → `func_1: [var_1: int] int => { $var_1 = 123; $self = 123; }` |
+| 08 | drop `()` shapes, add `=>`: `$assign_value = [n:] { $value = n }`, `apply_123: [F: [int]()] () => { F 123; }` |
+| 09 | `var` becomes a record type plus `new_var` with `\self (inst)`; `(res:)` → `$self = v.value` |
+| 10, 11 | `123` / `"abc"` → `$self = 123;` / `$self = "abc";` |
+| 12 | `(n:int) { $n = 123; }` → `$self = 123;` |
 | 14 | head removed; `n` needs a declaration or an input mechanism (**open**) |
 | 15 | head removed; rest unchanged |
 | 16 | `(m:)` result placeholder is gone; needs a “deduced result” spelling (**open**) |
-| 19, 24 | constructor-with-body → record type + `new_counter`; `C1: => …` → `$C1 <- …`; `get_num` shape → `int => { $self <- num; }` |
+| 19, 24 | constructor-with-body → record type + `new_counter`; `C1: => …` → `$C1 = …`; `get_num` shape → `int => { $self = num; }` |
 | 24 | also drop the module head |
 
 Both former open items are settled by the defaults above: `f: [a: int];`
@@ -1100,7 +1100,7 @@ deduces the result, and modules have no inputs (example 14 declares and assigns
 ## 18. Syntax v3 (superseded)
 
 v3 removes the v2 statement forms and makes the corpus depend only on the
-declaration and `<-` machinery. Everything below is implemented and covered by
+declaration and `=` machinery. Everything below is implemented and covered by
 `examples/` and `test/reject/`.
 
 ### Modules
@@ -1110,8 +1110,8 @@ implicit result. Results are written to named **outputs**:
 
 ```
 #!/bin/rhyme --output sum:out/sum.txt --output count:out/count.txt
-$stdout <- 123;
-$sum <- add_int 1 2;
+$stdout = 123;
+$sum = add_int 1 2;
 ```
 
 * `stdout` is predefined; shebang `--output name:path` declares more (repeatable,
@@ -1121,7 +1121,7 @@ $sum <- add_int 1 2;
   terminal, a file sink to its path. Strings therefore keep their quotes.
 * An output never assigned writes nothing.
 * Outputs are ordinary readable names: `sum` can be read back in the module;
-  `$sum <- …` writes it.
+  `$sum = …` writes it.
 
 ### Declarations
 
@@ -1147,7 +1147,7 @@ A body is one of two shapes, and a bare `{ }` is never one of them:
 ```
 f: [n: int] int => ... n;               # expression body
 f: [n: int] int => ... r: {             # named-result body
-    $r <- n;
+    $r = n;
 };
 ```
 
@@ -1155,12 +1155,12 @@ f: [n: int] int => ... r: {             # named-result body
 * `... r: { … }` names the result. `r` is pre-initialised from the declared
   result type: a fresh record (fields unset), a single-constructor value, or
   `()`. The body must assign it; the last value wins.
-* Inside a named-result body, `$name <- v` assigns the nearest binding, and
-  `expr.field <- v` mutates through a projection.
-* `$f <- g` where `f` is a declared function and `g` is callable makes `g` the
-  **fallback** for `f`; later `f $key <- …` clauses shadow it for matching keys,
-  and `g` itself is untouched. `$f <- ... body` is the ordinary fallback body.
-* A clause body `f $keys <- ... body` sees the parameters the clause did not
+* Inside a named-result body, `$name = v` assigns the nearest binding, and
+  `expr.field = v` mutates through a projection.
+* `$f = g` where `f` is a declared function and `g` is callable makes `g` the
+  **fallback** for `f`; later `f $key = …` clauses shadow it for matching keys,
+  and `g` itself is untouched. `$f = ... body` is the ordinary fallback body.
+* A clause body `f $keys = ... body` sees the parameters the clause did not
   match, and nothing else.
 
 ### Contextual `...` lambdas
@@ -1181,7 +1181,7 @@ G (... to_string (add_int arg_1 arg_2));
 ### Tables and keys
 
 Unchanged from v2: keys are `$`-quoted (`$[int]`, `$(1)`), groups are
-`${ pattern <- name; }`, dispatch prefers specificity and reports ties, and the
+`${ pattern = name; }`, dispatch prefers specificity and reports ties, and the
 whole-object body is the fallback. Keys may use a bare binder in pattern space
 (`$[X:]`); declaration parameters may not.
 
@@ -1190,9 +1190,9 @@ whole-object body is the fallback. Keys may use a bare binder in pattern space
 | removed | replacement | reject case |
 | --- | --- | --- |
 | `\self (x);` | `... x: { … }` | `directive-self` |
-| `\print (e);` | `$stdout <- e;` | `directive-print` |
+| `\print (e);` | `$stdout = e;` | `directive-print` |
 | `=> { }` bare body | `... r: { }` | `bare-block-body` |
-| `$f <- [m:] body` | name parameters in the declaration, then `... body` | `body-binders` |
+| `$f = [m:] body` | name parameters in the declaration, then `... body` | `body-binders` |
 | `f: [m:] T;` | `f: [m: ?] T;` | `untyped-param` |
 | `f: => [T] R;` packed | `f: [T] R;` | `packed-signature` |
 | `f: [a] R { … }` without `=>` | `f: [a: A] R => ... r: { }` | `no-arrow-body` |
@@ -1201,8 +1201,8 @@ whole-object body is the fallback. Keys may use a bare binder in pattern space
 ### Migration of the corpus
 
 All 28 examples are v3. The mechanical changes were: replace `\print (e)` with
-`$stdout <- (e)`; turn `$f <- [names] body` into `$f <- ... body` (parameters
-come from the declaration); turn `=> { … }` into `... r: { … $r <- … }`; replace
+`$stdout = (e)`; turn `$f = [names] body` into `$f = ... body` (parameters
+come from the declaration); turn `=> { … }` into `... r: { … $r = … }`; replace
 `\self (inst)` / `$self` with a named result (`... inst: { … }`) and the declared
 result type; replace `[m:]`/`[n:]` declarations with typed named parameters; and
 rewrite packed signatures as ordinary function declarations. Examples 10–12 now
@@ -1241,7 +1241,7 @@ runtime approximation of this section; there is still no static checker.
 ### Declarations
 
 ```
-v: int;                         # value, assigned later with $v <-
+v: int;                         # value, assigned later with $v =
 v: int => 0;                    # value with a default
 f: [x: int] int;                # function
 f: [x: int] int => ... x;       # function with a body
@@ -1251,9 +1251,12 @@ p: [@T] `point-of-\(T)`;        # type constructor (display literal)
 ```
 
 * A declaration with a **display literal** is a constant: a type or a
-  constructor. Constants cannot be `$`-assigned. The constructor-list scope
-  decides “constructor”; module/block scope decides “type”.
+  constructor. Constants cannot be `=`-assigned. The constructor-list scope
+  decides “constructor”; module/block scope decides “type”. A variant with one
+  constructor may omit the parentheses: ``point: `point` => new_point: …``.
 * `name: => T` is gone. A dynamic value is `name: ?;`.
+* A **bodyless clause** `name $keys;` is `name $keys = ();` and requires a unit
+  result.
 * Parameter forms: `[X: T]` value of type `T`; `[X: @T]` value whose type is
   inferred; `[X: ?]` dynamic value; `[@T]` a type argument; `[@?]` an anonymous
   type argument.
@@ -1266,8 +1269,9 @@ p: [@T] `point-of-\(T)`;        # type constructor (display literal)
 
 ### Bodies and definitions
 
-* `$name <- e` assigns a declared value; a bare `name <- e` is illegal.
-* `name $keys <- e` defines a clause. `$type_1 <- …` / `$ctor <- …` are illegal
+* `$name = e` assigns a declared value; a bare `name = e` is illegal. `<-` is
+  gone; `=` is the only binding/assignment token.
+* `name $keys = e` defines a clause. `$type_1 = …` / `$ctor = …` are illegal
   because display-literal names are constants.
 * Bodies are `... expr` and `... r: { … }`; `=> rhs` without `...` is a default.
 * A clause `...` body receives only the parameters its keys did not match.
@@ -1293,14 +1297,17 @@ $[X: T => ?]         # unpack a ? value as concrete T, bind X
 * On a `?` parameter a concrete slot without `=>` is illegal; write `$[X: ?]`
   or `$[X: T => ?]`. `$[X: @?]` / `$[X:]` are also illegal on `?`.
 * `$[ ]` is invalid.
+* `$[point]` is a **type key**: it matches a type value (`shape point`).
+  `$[point => ?]` is a **value key**: it unpacks a value whose runtime type is
+  `point` (`shape (new_point 1 2)`). They are different registrations.
 * Expression patterns are **value shapes**: `$(1)`, `$(ctor $[a:] …)`, and
   `$(type_1)` (a type test). `$(T => v)` is gone.
-* Headless narrowing uses a slot: `$[X: int => ?] <- G;`.
+* Headless narrowing uses a slot: `$[X: int => ?] = G;`.
 
 ### Dispatch
 
 * Type-directed dispatch uses a `?` parameter and an unpacking pattern:
-  `to_string: [X: ?] string; to_string $[n: int => ?] <- …;`
+  `to_string: [X: ?] string; to_string $[n: int => ?] = …;`
 * Shape-directed dispatch uses generic types and value constructors:
   `fmap: [data: @C @T] [func: [@T] @U] (@C @U);` with
   `fmap $(new_rec) …` / `fmap $(unshift_rec …) …`.
@@ -1321,7 +1328,7 @@ $[X: T => ?]         # unpack a ? value as concrete T, bind X
 | `[=> T]` packed parameter | `[X: ?]` (dynamic) or `[X: @T]` (inferred) |
 | `$(T => v)` typed pattern | `$[X: T]` / `$[X: T => ?]` / `$(shape)` |
 | `name: => T` dynamic declaration | `name: ?;` |
-| `$[T] <- e` cast | typed slot / unpacking pattern |
+| `$[T] = e` cast | typed slot / unpacking pattern |
 | `F "bool"` in a type position | syntactic types only |
 | `(T => v)` packed value, `(=>)` | gone |
 | `unit` type name | `()` |
@@ -1330,7 +1337,7 @@ $[X: T => ?]         # unpack a ? value as concrete T, bind X
 ### Tests and corpus
 
 `test/run.mjs` parses `examples/` and `test/reject/`; `test/eval.mjs` executes
-the runnable examples. Examples 01–16, 19–32, 39, 40 run; 17/18 and 33–38 are
+the runnable examples. Examples 01–16, 19–32, 39–41 run; 17/18, 33–38 and 42 are
 deliberate runtime errors; the old dependent-type part of example 23 and the
 packed-pair experiments are legacy. `test/reject/` now also locks packed
 parameters, typed patterns, dynamic declarations, empty slots, non-concrete

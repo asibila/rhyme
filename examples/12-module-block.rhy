@@ -5,5 +5,5 @@
 
 #!/bin/rhyme
 value: int;
-$value <- 123;
-$stdout <- value;
+$value = 123;
+$stdout = value;

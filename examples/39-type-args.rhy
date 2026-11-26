@@ -3,9 +3,9 @@
 point: [@T] `point-of-\(T)`;
 
 P: [@T] int;
-P $[point int] <- 1;
-$stdout <- (P (point int));   # 1
+P $[point int] = 1;
+$stdout = (P (point int));   # 1
 
 Q: [@T] int;
-Q $[point @T] <- 2;
-$stdout <- (Q (point string)); # 2
+Q $[point @T] = 2;
+$stdout = (Q (point string)); # 2

@@ -3,13 +3,13 @@
 # `?` is the top type: the static type of the value is unknown.
 # `F 123` is a dynamic value; to use it at `int`, unpack it:
 #
-#   $[X: int => ?] <- F 123;   # runtime type test; may fail
+#   $[X: int => ?] = F 123;   # runtime type test; may fail
 #
-# There is no static cast `$[int] <- e` in v4; `$[...]` slots are patterns.
+# There is no static cast `$[int] = e` in v4; `$[...]` slots are patterns.
 #
 # This file is the accepted form; the call still fails at run time because
 # `F` has no body (see test/eval.mjs).
 
 F: [int] ?;
 
-$[X: int => ?] <- F 123;
+$[X: int => ?] = F 123;

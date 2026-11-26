@@ -1,15 +1,15 @@
 # 07 — scope: assign the nearest binding
 #
 # Parameters are named and in scope inside the body.
-# `$var_1 <- 123` assigns the *parameter*, so the outer var_1 is untouched.
+# `$var_1 = 123` assigns the *parameter*, so the outer var_1 is untouched.
 # The result is the named result `r`.
 
 func_1: [var_1: int] int => ... r: {
-	$var_1 <- 123;
-	$r <- 123;
+	$var_1 = 123;
+	$r = 123;
 };
 
 var_1: int;
-$var_1 <- 222;
-$stdout <- (func_1 var_1);           # 123
-$stdout <- (var_1);                  # 222
+$var_1 = 222;
+$stdout = (func_1 var_1);           # 123
+$stdout = (var_1);                  # 222

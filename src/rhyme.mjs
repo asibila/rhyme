@@ -1,8 +1,8 @@
 // Rhyme2 — lexer + parser for the surface grammar in SPEC.md.
 // This is deliberately syntax-only: it proves the grammar, not the semantics.
 
-const PUNCT2 = new Set(["<-", "=>", "&&", "||", "==", "!=", "<=", ">="]);
-const PUNCT1 = new Set("()[]{}:;,.$?!<>@".split(""));
+const PUNCT2 = new Set(["=>", "&&", "||", "==", "!=", "<=", ">="]);
+const PUNCT1 = new Set("()[]{}:;,.$?!<>@=".split(""));
 
 export function lex(src) {
   if (src.charCodeAt(0) === 0xfeff) src = src.slice(1); // tolerate a UTF-8 BOM
@@ -124,7 +124,7 @@ class Parser {
     }
 
     const e = this.parseExpr(false);
-    if (this.at("<-")) {
+    if (this.at("=")) {
       if (e.k !== "proj") {
         this.err("a definition head must be `$...` keys or a projection path");
       }
@@ -166,13 +166,18 @@ class Parser {
       let ctors = null;
       if (this.at("=>")) {
         this.nextSym();
-        this.expect("(");
-        ctors = [];
-        while (!this.at(")")) {
-          ctors.push(this.parseCtor());
-          this.eat(";");
+        if (this.at("(")) {
+          this.nextSym();
+          ctors = [];
+          while (!this.at(")")) {
+            ctors.push(this.parseCtor());
+            this.eat(";");
+          }
+          this.expect(")");
+        } else {
+          // parentheses may be omitted for a single constructor
+          ctors = [this.parseCtor()];
         }
-        this.expect(")");
         checkHoles(holes, paramNames(params), `type ${name}`);
       } else if (this.at("{")) {
         this.err("constructor-with-body is removed: declare a record type and a function");
@@ -269,26 +274,33 @@ class Parser {
       if (this.atId()) {
         const name = this.t[this.i++].v;
         if (this.at(".")) {
-          // $name.field <- value
+          // $name.field = value
           let target = { k: "name", v: name };
           while (this.eat(".")) target = { k: "proj", base: target, field: this.expectId() };
-          this.expect("<-");
+          this.expect("=");
           const rhs = this.parseRhs();
           this.eat(";");
           return { k: "defPath", target, rhs };
         }
         const keys = this.parseKeys();
-        this.expect("<-");
-        const rhs = this.parseRhs();
-        this.eat(";");
-        return { k: "def", name, keys, rhs };
+        if (this.at("=")) {
+          this.nextSym();
+          const rhs = this.parseRhs();
+          this.eat(";");
+          return { k: "def", name, keys, rhs };
+        }
+        if (keys.length > 0 && (this.at(";") || this.peek().t === "eof")) {
+          this.eat(";");
+          return { k: "def", name, keys, rhs: { k: "alias", body: { k: "unit" } }, implicit: true };
+        }
+        this.err('expected "=" in a definition');
       }
       const keys = [this.parseKeyBody()];
       while (this.at("$")) {
         this.nextSym();
         keys.push(this.parseKeyBody());
       }
-      this.expect("<-");
+      this.expect("=");
       const rhs = this.parseRhs();
       this.eat(";");
       return { k: "def", name: null, keys, rhs };
@@ -296,10 +308,17 @@ class Parser {
 
     const name = this.expectId();
     const keys = this.parseKeys(); // at least one; caller checked '$'
-    this.expect("<-");
-    const rhs = this.parseRhs();
-    this.eat(";");
-    return { k: "def", name, keys, rhs };
+    if (this.at("=")) {
+      this.nextSym();
+      const rhs = this.parseRhs();
+      this.eat(";");
+      return { k: "def", name, keys, rhs };
+    }
+    if (keys.length > 0 && (this.at(";") || this.peek().t === "eof")) {
+      this.eat(";");
+      return { k: "def", name, keys, rhs: { k: "alias", body: { k: "unit" } }, implicit: true };
+    }
+    this.err('expected "=" in a definition');
   }
 
   parseKeys() {
@@ -307,11 +326,11 @@ class Parser {
     while (this.at("$")) {
       this.nextSym();
       if (this.at("{")) {
-        // ${ pattern <- name; ... } — a key list with a binder per argument
+        // ${ pattern = name; ... } — a key list with a binder per argument
         this.nextSym();
         while (!this.at("}")) {
           const key = this.parseKey();
-          this.expect("<-");
+          this.expect("=");
           const name = this.expectId();
           this.eat(";");
           keys.push({ k: "keyBound", key, name });
@@ -603,7 +622,7 @@ class Parser {
       if (this.peek().t === "eof") this.err("unterminated {");
       this.expect("$");
       const name = this.expectId();
-      this.expect("<-");
+      this.expect("=");
       const value = this.parseExpr(false);
       this.eat(";");
       args.push({ name, value });
@@ -651,7 +670,7 @@ class Parser {
       return { k: "name", v: x.v };
     }
     if (!pattern && this.at("$")) {
-      // a definition in expression position, e.g. print ($[int] <- n)
+      // a definition in expression position, e.g. print ($[int] = n)
       this.nextSym();
       let name = null;
       const keys = [];
@@ -664,7 +683,7 @@ class Parser {
           keys.push(this.parseKeyBody());
         }
       }
-      if (!this.at("<-")) this.err("expected <- in a $-definition");
+      if (!this.at("=")) this.err("expected = in a $-definition");
       this.nextSym();
       const rhs = this.parseRhs();
       return { k: "define", name, keys, rhs };
@@ -928,7 +947,7 @@ export function dump(node, depth = 0) {
       const bits = [`${pad}named-app`];
       bits.push(dump(node.callee, depth + 1));
       for (const a of node.args) {
-        bits.push(`${"  ".repeat(depth + 1)}$${a.name} <-`);
+        bits.push(`${"  ".repeat(depth + 1)}$${a.name} =`);
         bits.push(dump(a.value, depth + 2));
       }
       return bits.join("\n");

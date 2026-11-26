@@ -1,0 +1,3 @@
+# Must fail: `<-` is gone. Binding and assignment use `=`.
+x: int;
+$x <- 1;

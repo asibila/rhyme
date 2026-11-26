@@ -13,9 +13,9 @@
 bool: `bool` => ( false: `F`; true: `T` );
 
 n: int;
-$n <- 3;
+$n = 3;
 
-$stdout <- (n < 3);                      # F
-$stdout <- (n > 0 && n != 9);            # T
-$stdout <- (!(n == 3) || false);         # F
-$stdout <- (true == true && n >= 3);     # T
+$stdout = (n < 3);                      # F
+$stdout = (n > 0 && n != 9);            # T
+$stdout = (!(n == 3) || false);         # F
+$stdout = (true == true && n >= 3);     # T

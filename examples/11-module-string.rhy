@@ -3,4 +3,4 @@
 # Strings render with their double quotes kept: "abc".
 
 #!/bin/rhyme
-$stdout <- "abc";
+$stdout = "abc";

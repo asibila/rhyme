@@ -1,0 +1,3 @@
+# 42 — a bodyless clause needs a unit result
+f: [x: int] int;
+f $[int];                         # ILLEGAL: result is int, not ()

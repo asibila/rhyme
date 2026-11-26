@@ -1,22 +1,22 @@
 # 13 — whole-object body vs per-key clause
 #
-# `$F <- ... "any"` assigns the whole object and is the least specific branch.
-# `F $[int] <- ...` assigns one key, so it shadows the body for int arguments.
+# `$F = ... "any"` assigns the whole object and is the least specific branch.
+# `F $[int] = ...` assigns one key, so it shadows the body for int arguments.
 # Both specificity and source order matter.
 
 F: [n: ?] string;
-$F <- ... "any";                # whole object
-F $[int] <- "int";              # part of it: wins for a type argument
+$F = ... "any";                # whole object
+F $[int] = "int";              # part of it: wins for a type argument
 
-# `$G <- g` makes `g` G's fallback; keys on G shadow it for matching keys and
+# `$G = g` makes `g` G's fallback; keys on G shadow it for matching keys and
 # `g` itself is untouched.
 G: [n: ?] string;
 g_body: [n: ?] string => ... "g";
-$G <- g_body;
-G $[int] <- "int";
+$G = g_body;
+G $[int] = "int";
 
-$stdout <- (F int);             # "int"
-$stdout <- (F string);          # "any"
-$stdout <- (G int);             # "int"
-$stdout <- (G string);          # "g"
-$stdout <- (g_body int);        # "g" — the alias did not change g_body
+$stdout = (F int);             # "int"
+$stdout = (F string);          # "any"
+$stdout = (G int);             # "int"
+$stdout = (G string);          # "g"
+$stdout = (g_body int);        # "g" — the alias did not change g_body

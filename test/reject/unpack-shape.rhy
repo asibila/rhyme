@@ -1,3 +1,3 @@
 # Must fail: the value side of an unpacking slot is always `?`.
 f: [?] int;
-f $[X: int => 1] <- 1;
+f $[X: int => 1] = 1;

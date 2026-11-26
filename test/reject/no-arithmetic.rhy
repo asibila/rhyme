@@ -2,4 +2,4 @@
 # Arithmetic, if needed, is a table (see examples/19-counter.rhy).
 
 n: int;
-$n <- 1 + 2;
+$n = 1 + 2;

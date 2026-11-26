@@ -1,2 +1,2 @@
 # Must fail: a declaration body requires `=> ...`.
-f: [a: int] int { $r <- 1; };
+f: [a: int] int { $r = 1; };

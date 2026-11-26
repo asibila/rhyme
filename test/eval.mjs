@@ -50,6 +50,8 @@ const cases = [
   { file: "38-dependent-type", error: /is not a type/ },
   { file: "39-type-args", out: "1\n2\n" },
   { file: "40-type-vars", out: "point-of-int\npoint-of-@?\n" },
+  { file: "41-shapes", out: "12\n\"ok\"\n" },
+  { file: "42-bodyless-nonunit", error: /bodyless clause requires a unit result/ },
 ];
 
 let ok = 0;

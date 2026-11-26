@@ -2,5 +2,5 @@
 #!/bin/rhyme
 f: [] int => ... r: {
 	\self (x);
-	$r <- 1;
+	$r = 1;
 };

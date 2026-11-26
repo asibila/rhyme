@@ -4,9 +4,9 @@
 # unconstrained, but still bound by name for the body.
 
 f: [A: ?] [B: int] [C: int] string;
-$f <- ... "fallback";
+$f = ... "fallback";
 
-f ${ $(1) <- B } <- to_string C;
+f ${ $(1) = B } = to_string C;
 
-$stdout <- (f int 1 42);      # 42
-$stdout <- (f int 2 3);       # fallback
+$stdout = (f int 1 42);      # 42
+$stdout = (f int 2 3);       # fallback

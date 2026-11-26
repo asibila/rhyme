@@ -1,5 +1,5 @@
 # Must fail: module heads are removed. A module is a bare statement list.
 
 (n: int) {
-    $n <- 1;
+    $n = 1;
 };

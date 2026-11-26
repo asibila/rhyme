@@ -655,6 +655,10 @@ class Evaluator {
   addClause(node, env) {
     const cell = env.find(node.name);
     if (!cell) fail(`'${node.name}' is not declared`);
+    if (node.implicit) {
+      const r = cell.sig && cell.sig.result;
+      if (!r || r.k !== "unit") fail("a bodyless clause requires a unit result");
+    }
     let table = cell.set && cell.value && cell.value.k === "table" ? cell.value : null;
     if (!table) {
       table = this.makeTable(node.name, null, cell.sig);
@@ -743,7 +747,7 @@ class Evaluator {
       const c = e.declare(a.name); c.value = v; c.set = true;
     }
 
-    // record construction: T { $field <- value; ... }
+    // record construction: T { $field = value; ... }
     if (callee.k === "type" && callee.fields) {
       const tenv = new Map();
       (callee.typeParams || []).forEach((p, i) => {

@@ -1,4 +1,4 @@
 # 36 — an unpack clause only matches its type
 G: [?] int;
-G $[X: int => ?] <- 1;
-$stdout <- (G "abc");  # no int clause
+G $[X: int => ?] = 1;
+$stdout = (G "abc");  # no int clause

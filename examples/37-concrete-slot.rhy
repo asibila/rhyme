@@ -1,4 +1,4 @@
 # 37 — on a ? parameter, a concrete slot must unpack
 G: [?] int;
-G $[X: int] <- 1;      # ILLEGAL: use $[X: int => ?]
-$stdout <- (G 1);
+G $[X: int] = 1;      # ILLEGAL: use $[X: int => ?]
+$stdout = (G 1);

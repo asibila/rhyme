@@ -10,17 +10,17 @@ rec: [@T] `` => (
 );
 
 R: rec int;
-$R <- new_rec;
-$R <- unshift_rec 123 R;
-$R <- unshift_rec 222 R;
+$R = new_rec;
+$R = unshift_rec 123 R;
+$R = unshift_rec 222 R;
 
 fmap: [data: @C @T] [func: [@T] @U] (@C @U);
 
-fmap $(new_rec) $[f: [@T] @U] <- new_rec;
-fmap $(unshift_rec $[a: @T] $[b: @C @T]) $[f: [@T] @U] <-
+fmap $(new_rec) $[f: [@T] @U] = new_rec;
+fmap $(unshift_rec $[a: @T] $[b: @C @T]) $[f: [@T] @U] =
 	unshift_rec (f a) (fmap b f);
 
 RR: rec int;
-$RR <- fmap R (add_int 1000);
+$RR = fmap R (add_int 1000);
 
-$stdout <- RR;                        # 1222-1123-
+$stdout = RR;                        # 1222-1123-

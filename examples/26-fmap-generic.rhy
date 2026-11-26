@@ -14,17 +14,17 @@ rec: [@T] `` => (
 
 fmap: [data: @C @T] [func: [@T] @U] (@C @U);
 
-fmap $(new_rec) $[f: [@T] @U] <- new_rec;
-fmap $(unshift_rec $[a: @T] $[b: @C @T]) $[f: [@T] @U] <-
+fmap $(new_rec) $[f: [@T] @U] = new_rec;
+fmap $(unshift_rec $[a: @T] $[b: @C @T]) $[f: [@T] @U] =
 	unshift_rec (f a) (fmap b f);
 
 nums: rec int;
-$nums <- unshift_rec 1 (unshift_rec 2 new_rec);
+$nums = unshift_rec 1 (unshift_rec 2 new_rec);
 
 plus: rec int;
-$plus <- fmap nums (add 10);
-$stdout <- plus;                      # 11-12-
+$plus = fmap nums (add 10);
+$stdout = plus;                      # 11-12-
 
 words: rec string;
-$words <- fmap nums to_string;
-$stdout <- words;                     # "1"-"2"-
+$words = fmap nums to_string;
+$stdout = words;                     # "1"-"2"-

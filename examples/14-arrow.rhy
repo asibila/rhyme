@@ -1,18 +1,18 @@
 # 14 — a typed headless binding
 #
-# `$[T: ... ] <- e` is a slot pattern: it checks e against T and binds the name.
+# `$[T: ... ] = e` is a slot pattern: it checks e against T and binds the name.
 # It is not a cast; dynamic values are unpacked with `$[X: T => ?]`.
 
 n: int;
-$n <- 123;
+$n = 123;
 
-$[X: int] <- n;
-$stdout <- X;                          # 123
+$[X: int] = n;
+$stdout = X;                          # 123
 
 either: [@T] [@U] `either-\(T)-\(U)` => (
 	left: [reason: @T] `\(reason)`;
 	right: [value: @U] `\(value)`;
 );
 
-$[Y: either int string] <- left 1;
-$stdout <- Y;                          # 1
+$[Y: either int string] = left 1;
+$stdout = Y;                          # 1

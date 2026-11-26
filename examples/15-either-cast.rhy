@@ -12,11 +12,11 @@
 bool: `bool` => ( false: `F`; true: `T` );
 
 F: [X: ?] string;
-F $(123) <- "";
+F $(123) = "";
 
 either: [@T] [@U] `either-\(T)-\(U)` => (
 	left: [reason: @T] `\(reason)`;
 	right: [value: @U] `\(value)`;
 );
 
-$stdout <- (left 1);
+$stdout = (left 1);

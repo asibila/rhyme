@@ -1,4 +1,4 @@
 # Must fail: `:` is ascription only, so this is not a destructuring binding.
-# The correct form is `$(a:, b:, c:) <- func 1 2;`.
+# The correct form is `$(a:, b:, c:) = func 1 2;`.
 
 a, b, c: func 1 2;

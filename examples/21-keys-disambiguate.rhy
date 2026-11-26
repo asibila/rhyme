@@ -1,11 +1,11 @@
 
 F: [x: int] [y: int] string;
 
-$F <- ... "";
+$F = ... "";
 
-F $(1) $[Y:] <- "case1";
-F $[X:] $(1) <- "case2";
+F $(1) $[Y:] = "case1";
+F $[X:] $(1) = "case2";
 
 # now it is ambiguous, and compiler asks us to define key:
 
-F $(1) $(1)  <- "case12";
+F $(1) $(1)  = "case12";

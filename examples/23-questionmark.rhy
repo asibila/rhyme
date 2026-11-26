@@ -2,11 +2,11 @@
 # 1. map from string to type — example, give type from string
 
 F: [n: string] ?;
-$F <- ... void;
+$F = ... void;
 
-F $("bool") <- bool;
-F $("int") <- int;
-F $("string") <- string;
+F $("bool") = bool;
+F $("int") = int;
+F $("string") = string;
 
 # dependent type positions are gone in v4: `[F "bool"]` is not a type
 
@@ -14,11 +14,11 @@ F $("string") <- string;
 #    print_int/print_float/print_bool return a string; they do not write.
 
 G: [X: ?] string;
-$G <- ... "";
+$G = ... "";
 
-G $[n: int => ?] <- print_int n;
-G $[n: float => ?] <- print_float n;
-G $[n: bool => ?] <- print_bool n;
+G $[n: int => ?] = print_int n;
+G $[n: float => ?] = print_float n;
+G $[n: bool => ?] = print_bool n;
 
 G 123;    # calls print_int (result discarded)
 G 23.4;   # calls print_float
@@ -27,25 +27,25 @@ G "asdf"; # calls the default body
 # 3. return any type — return a default value for a type
 
 H: [n: string] ?;
-$H <- ... void;
+$H = ... void;
 
-H $("int") <- 0;
-H $("string") <- "";
-H $("bool") <- false;
+H $("int") = 0;
+H $("string") = "";
+H $("bool") = false;
 
 # 4. take a type — map type to string
 
 I: [@T] string;
-$I <- ... "(unknown)";
+$I = ... "(unknown)";
 
-I $[int] <- "int";
-I $[string] <- "string";
+I $[int] = "int";
+I $[string] = "string";
 
 # 5. return the key type from a container type
 #    (the type-level part is illustrative; the table is not called)
 
 key: [[?] ?] ?;
-$key <- ... void;
+$key = ... void;
 
-key $[array] <- int;
-key $[dict $[k:]] <- k;
+key $[array] = int;
+key $[dict $[k:]] = k;

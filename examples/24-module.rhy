@@ -4,29 +4,29 @@
 # functions declared inside the constructor body, so they close over its state.
 
 counter_id: int;
-$counter_id <- 0;
+$counter_id = 0;
 
 succ: [n: int] int;
-$succ <- ... add_int n 1;
+$succ = ... add_int n 1;
 
 counter: [id: int] [increment: [x: ()] ()] [get_num: [x: ()] int] `\(id)\(increment)\(get_num)`;
 
 new_counter: [] counter => ... inst: {
-	$inst.id <- counter_id;
-	$counter_id <- succ counter_id;
+	$inst.id = counter_id;
+	$counter_id = succ counter_id;
 
 	num: int;
-	$num <- 0;
+	$num = 0;
 
-	inc: [x: ()] () => ... r: { $num <- succ num; $r <- (); };
-	get: [x: ()] int => ... r: { $r <- num; };
+	inc: [x: ()] () => ... r: { $num = succ num; $r = (); };
+	get: [x: ()] int => ... r: { $r = num; };
 
-	$inst.increment <- inc;
-	$inst.get_num <- get;
+	$inst.increment = inc;
+	$inst.get_num = get;
 };
 
 C1: counter;
-$C1 <- new_counter ();
+$C1 = new_counter ();
 C1.increment ();
 C1.increment ();
 
@@ -36,18 +36,18 @@ rec: [@T] `` => (
 );
 
 R: rec int;
-$R <- new_rec;
-$R <- unshift_rec 123 R;
-$R <- unshift_rec 222 R;
+$R = new_rec;
+$R = unshift_rec 123 R;
+$R = unshift_rec 222 R;
 
 fmap: [data: @C @T] [func: [@T] @U] (@C @U);
 
-fmap $(new_rec) $[f: [@T] @U] <- new_rec;
+fmap $(new_rec) $[f: [@T] @U] = new_rec;
 
-fmap $(unshift_rec $[a: @T] $[b: @C @T]) $[f: [@T] @U] <-
+fmap $(unshift_rec $[a: @T] $[b: @C @T]) $[f: [@T] @U] =
 	unshift_rec (f a) (fmap b f);
 
 RR: rec int;
-$RR <- fmap R (add_int 1000);
+$RR = fmap R (add_int 1000);
 
-$stdout <- (C1);
+$stdout = (C1);

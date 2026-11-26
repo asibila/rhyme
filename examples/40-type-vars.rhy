@@ -6,7 +6,7 @@
 point: [@T] `point-of-\(T)`;
 
 p: point @?;              # the argument is solved by the assignment
-$p <- point int { };
-$stdout <- p;             # point-of-int
+$p = point int { };
+$stdout = p;             # point-of-int
 
-$stdout <- (point @? { });  # an unsolved anonymous argument
+$stdout = (point @? { });  # an unsolved anonymous argument

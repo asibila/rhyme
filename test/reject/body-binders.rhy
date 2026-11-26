@@ -1,4 +1,4 @@
 # Must fail: a body does not introduce binders with `[...]`.
 # Parameters are named in the declaration.
 f: [a: int] int;
-$f <- [a:] 1;
+$f = [a:] 1;

@@ -3,22 +3,22 @@
 type_1: `type_1` => (ctor_1_A: `c1A`; ctor_1_B: `c1B`);
 
 F: [@T] int;
-F $[@?] <- 1;              # discard the type argument
-$stdout <- (F int);        # 1
+F $[@?] = 1;              # discard the type argument
+$stdout = (F int);        # 1
 
 G: [?] int;
-G $[X: ?] <- 1;            # dynamic slot, no unpacking
-G $[n: int => ?] <- 2;     # unpack an int
-G $[float => ?] <- 3;      # unpack a float, no binder
-$stdout <- (G 5);          # 2 (more specific)
-$stdout <- (G 1.5);        # 3
-$stdout <- (G "abc");      # 1
+G $[X: ?] = 1;            # dynamic slot, no unpacking
+G $[n: int => ?] = 2;     # unpack an int
+G $[float => ?] = 3;      # unpack a float, no binder
+$stdout = (G 5);          # 2 (more specific)
+$stdout = (G 1.5);        # 3
+$stdout = (G "abc");      # 1
 
 C: [x: int] int;
-C $[Y:] <- 4;              # $[Y:] is $[Y: @?]: bind, no check
-$stdout <- (C 5);          # 4
+C $[Y:] = 4;              # $[Y:] is $[Y: @?]: bind, no check
+$stdout = (C 5);          # 4
 
 V: ?;
-$V <- 7;
-$[X: int => ?] <- V;       # headless narrowing
-$stdout <- X;              # 7
+$V = 7;
+$[X: int => ?] = V;       # headless narrowing
+$stdout = X;              # 7

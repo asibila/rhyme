@@ -1,7 +1,7 @@
 # 18 — miss behaviour
 #
 # A function must assign its whole object:
-#   $F <- ... "fallback";
+#   $F = ... "fallback";
 # That body is the fallback at *any* depth, so once the object exists a miss
 # never fails:
 #   F 2          -> fallback      (no key at all)
@@ -10,21 +10,21 @@
 #
 # Keys only refine the body. Without a body the program is rejected, even when
 # keys are present:
-#   H $(1) <- "one";   # FAIL: nothing to fall back to
+#   H $(1) = "one";   # FAIL: nothing to fall back to
 
 F: [m: int] string;
-$F <- ... "fallback";             # whole object
-F $(1) <- "one";
-$stdout <- (F 1);                    # one
-$stdout <- (F 2);                    # fallback
+$F = ... "fallback";             # whole object
+F $(1) = "one";
+$stdout = (F 1);                    # one
+$stdout = (F 2);                    # fallback
 
 G: [m: int] [n: bool] string;
-$G <- ... "fallback";             # whole object
-G $(1) $(true) <- "one-true";
-$stdout <- (G 1 true);               # one-true
-$stdout <- (G 1 false);              # fallback -  miss after a partial match
-$stdout <- (G 2 true);               # fallback -  miss on the first argument
+$G = ... "fallback";             # whole object
+G $(1) $(true) = "one-true";
+$stdout = (G 1 true);               # one-true
+$stdout = (G 1 false);              # fallback -  miss after a partial match
+$stdout = (G 2 true);               # fallback -  miss on the first argument
 
 H: [int] string;
-H $(1) <- "one";                # FAIL - no whole-object body at all
-$stdout <- (H 2);                    # ? nothing to fall back to
+H $(1) = "one";                # FAIL - no whole-object body at all
+$stdout = (H 2);                    # ? nothing to fall back to

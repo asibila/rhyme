@@ -1,0 +1,14 @@
+# 41 — shapes: a type key, a single constructor, and a bodyless clause
+
+shape: [?];                       # unit result
+
+point: `point` => new_point: [first: int] [second: int] `\(first)\(second)`;
+
+shape $[point];                   # bodyless = `= ()`: point is a shape
+
+p: point;
+$p = new_point 1 2;
+$stdout = p;                      # 12
+
+shape point;                      # call with the type value
+$stdout = "ok";

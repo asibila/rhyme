@@ -3,4 +3,4 @@
 # A v3 module has no `self`; a result goes to an output sink such as `$stdout`.
 
 #!/bin/rhyme
-$stdout <- 123;
+$stdout = 123;

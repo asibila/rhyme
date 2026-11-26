@@ -26,7 +26,7 @@ their quotes. A shebang can add file sinks:
 ```
 #!/bin/rhyme --output sum:out/sum.txt
 sum: int;                 # optional: narrows the sink
-$sum <- add_int 1 2;
+$sum = add_int 1 2;
 ```
 
 Parse and dump its syntax tree:
@@ -44,8 +44,8 @@ node bin/rhyme.mjs --tokens examples/01-types-fgh.rhy
 Run the test suites:
 
 ```
-node test/run.mjs      # examples parse, reject cases fail (64 cases)
-node test/eval.mjs     # runnable examples produce the expected output (40 cases)
+node test/run.mjs      # examples parse, reject cases fail (67 cases)
+node test/eval.mjs     # runnable examples produce the expected output (42 cases)
 ```
 
 With npm:
@@ -79,10 +79,12 @@ is **no static checker** yet. It implements syntax v4 (§19):
 - `@T` is a named type variable and `@?` an anonymous one: a module value’s hole
   is solved by the first assignment, a function parameter’s is fresh per call;
 - values, mutable environments, top-to-bottom initialisation;
+- binding/assignment uses `=` (`$x = e`, `name $keys = e`, `expr.field = v`);
+  `<-` is gone and is a parse error;
 - modules as bare statement lists: results go to output sinks (`$stdout` and
   shebang `--output name:path`), rendered at the end;
 - declarations with display literals are **constants** (types/constructors);
-  `$type_1 <- …` is rejected;
+  `$type_1 = …` is rejected;
 - typed constants/defaults (`name: T => default`), shared or fresh as
   parameterised; named braces fill omitted parameters;
 - bodies `... expr` / `... r: { … }`; `=> rhs` without `...` is a default;
@@ -91,12 +93,12 @@ is **no static checker** yet. It implements syntax v4 (§19):
 - slots: `$[T]`/`$[@T]`/`$[@?]` type arguments; `$[X: T]`/`$[X: @T]`/`$[X: ?]`
   value slots; `$[X: T => ?]` unpacks a `?` value as a concrete `T`;
 - shapes: `$(1)`, `$(ctor …)`, `$(type_1)`; typed patterns `$(T => v)` are gone;
-- headless narrowing `$[X: int => ?] <- G;`;
+- headless narrowing `$[X: int => ?] = G;`;
 - generic dispatch by value shapes (`fmap`) and dynamic dispatch by `?` unpacking
   (`to_string`);
-- record types and construction (`counter { $id <- 1 }`, `point int { }`),
+- record types and construction (`counter { $id = 1 }`, `point int { }`),
   methods as fields, per-instance state, visibility from the display template;
-- application: positional, partial, and named `{ $p <- v }` braces; `@` holes are
+- application: positional, partial, and named `{ $p = v }` braces; `@` holes are
   inferred from the supplied values;
 - display: templates with holes and backslash escapes, `to_string`; strings are
   quoted at the boundary;
@@ -104,11 +106,11 @@ is **no static checker** yet. It implements syntax v4 (§19):
 - arithmetic builtins `add_int` / `add`, curried: `add_int 1` is a function;
   `print_int` / `print_float` / `print_bool` return strings.
 
-Examples that run: 01–16, 19–32, 39, 40; 17/18 and 33–38 are deliberate runtime
-errors (unassigned `F`, `H` with keys but no body, constant assignment, missing
-argument, inference conflict, unpack miss, illegal concrete slot on `?`,
-dependent type position). Example 23 keeps the value/table part; its dependent
-type position is legacy.
+Examples that run: 01–16, 19–32, 39–41; 17/18, 33–38 and 42 are deliberate
+runtime errors (unassigned `F`, `H` with keys but no body, constant assignment,
+missing argument, inference conflict, unpack miss, illegal concrete slot on `?`,
+dependent type position, bodyless clause with a non-unit result). Example 23
+keeps the value/table part; its dependent type position is legacy.
 
 Not implemented: the static checker and full type inference. Removed v1–v3 forms
 are parse/runtime errors, kept as `test/reject/` cases.

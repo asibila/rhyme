@@ -1,0 +1,66 @@
+# Preserved notebook scratch from example 29 (not a runnable example).
+
+
+
+
+
+
+
+
+
+
+
+
+
+F: [X: @T] 
+G: [@T] @?
+
+F: @?;
+$F = 123; # determines that F is of type int
+$F = "abc"; # ILLEGAL, F is int
+
+FF: [@T] [@T] int;
+
+FF $[int] $[string] 
+
+stdout: ?;
+
+F: [int] int;
+F $(1) = 123; # OK
+F $(int => 1) = 123; # illegal - int does not allow unpacking
+F $[X: int] = 0;
+
+G: [?] int;
+G $(int => 1) = "1"; # OK
+G $(int => ?) = "is_int"; OK
+
+G $[X: int => ?] = "is_int"; # DIFFERENT SYNTAX FOR UNPACKING
+
+
+
+
+F: [X: @T] int;
+
+F $[int] 
+
+
+fmap: [data: @C @T] [func: [@T] @U] @C @U;
+fmap $(new_rec) $[func:] = new_rec;
+fmap $(unshift_rec $[X:] $[Y:]) $[func:] =
+	unshift_rec (func X) (fmap Y func);
+
+
+
+
+shape: [?];
+
+point: `` => new_point 
+shape $[point => ?];
+shape $[rectangle => ?];
+shape $[circle => ?];
+
+
+
+collide: [arg1: ? = shape arg1] [arg2: ? = shape arg2] 
+
+

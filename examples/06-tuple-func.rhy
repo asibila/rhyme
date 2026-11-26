@@ -5,8 +5,8 @@
 # `:` is ascription only, so destructuring is a $-pattern binding.
 
 func: [a: int] [b: int] (int, int, int);
-$func <- ... (0, 0, 0);         # body
-func $(1) $(2) <- (10, 20, 30);
+$func = ... (0, 0, 0);         # body
+func $(1) $(2) = (10, 20, 30);
 
-$(a:, b:, c:) <- func 1 2;
-$stdout <- ((a, b, c));              # (10, 20, 30)
+$(a:, b:, c:) = func 1 2;
+$stdout = ((a, b, c));              # (10, 20, 30)

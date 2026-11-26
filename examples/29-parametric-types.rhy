@@ -3,17 +3,17 @@
 
 type_1: `type_1` => (ctor_1_A: `c1A`; ctor_1_B: `c1B`);
 
-# $type_1 <- ctor_1_A;   # ILLEGAL: display literal => constant
-# type_1 <- expr;        # ILLEGAL: bare head
-# ctor_1_A <- expr;      # ILLEGAL: bare head
+# $type_1 = ctor_1_A;    # ILLEGAL: display literal => constant
+# type_1 = expr;         # ILLEGAL: bare head
+# ctor_1_A = expr;       # ILLEGAL: bare head
 
-$(ctor_1_A) <- expr;      # value shape: the nullary ctor
-$(type_1)   <- expr;      # value shape: type test, any ctor
-# $(type_1 $[@?])         # illegal: type_1 has no type parameters
+$(ctor_1_A) = ctor_1_A;   # value shape: the nullary constructor
+$(type_1)   = ctor_1_B;   # value shape: type test, any ctor
+# $(type_1 $[@?])          # illegal: type_1 has no type parameters
 
 func_1: [x: type_1] int => ... 123;
-func_1 { };               # ILLEGAL: x has no default
-func_1 { $x <- ctor_1_A };
+# func_1 { };              # ILLEGAL: x has no default
+$stdout = (func_1 { $x = ctor_1_A });
 
 ##########################################
 # STEP 1: nullable types
@@ -21,92 +21,54 @@ func_1 { $x <- ctor_1_A };
 nullable_type_1: type_1 => ctor_1_A;
 
 func_nullable_1: [x: nullable_type_1] int => ... 123;
-func_nullable_1 { };      # ok: x = ctor_1_A
+$stdout = (func_nullable_1 { });   # ok: x = ctor_1_A
 
-$nullable_type_1 <- ctor_1_B;   # value changes; default stays ctor_1_A
-$stdout <- nullable_type_1;     # c1B
+$nullable_type_1 = ctor_1_B;       # value changes; default stays ctor_1_A
+$stdout = nullable_type_1;         # c1B
 
 nullable_array: [@elem] array @elem => new_array;
 # nullable_array int : type array int with default new_array
-# $v <- nullable_array int;    # expression: new_array
+# $v = nullable_array int;        # expression: new_array
 
 ##########################################
 # STEP 2
 
-to_string: [X: ?] string;
+to_string: [X: ?] string;   # ? allows unpacking; [X: @T] would not
 
-to_string $[n: int   => ?] <- print_int n;
-to_string $[n: float => ?] <- print_float n;
-to_string $[n: bool  => ?] <- print_bool n;
+to_string $[n: int   => ?] = print_int n;
+to_string $[n: float => ?] = print_float n;
+to_string $[n: bool  => ?] = print_bool n;
+to_string $[n: string => ?] = n;
+
+$stdout = (to_string 5);
+$stdout = (to_string "abc");
 
 point: [@T] `point-of-\(T)`;
-$p <- point int { };       # zero-field value, displays point-of-int
-$q <- point ? { };         # argument is the top type
+p: point int;
+$p = point int { };        # zero-field value, displays point-of-int
+$stdout = p;
+q: point ?;
+$q = point ? { };          # argument is the top type
+$stdout = q;
 
 func_2: [X: nullable_array @elem] int;
 # key: $[X: nullable_array @elem]   (no unpack)
 # for dispatch on elem: take X: ? and use $[n: nullable_array int => ?]
 
+##########################################
+# STEP 3: inference and unpacking
 
-
-
-
-
-
-
-
-
-
-
-F: [X: @T] 
-G: [@T] @?
-
-F: @?;
-$F <- 123; # determines that F is of type int
-$F <- "abc"; # ILLEGAL, F is int
-
-FF: [@T] [@T] int;
-
-FF $[int] $[string] 
-
-stdout: ?;
-
-F: [int] int;
-F $(1) <- 123; # OK
-F $(int => 1) <- 123; # illegal - int does not allow unpacking
-F $[X: int] <- 0;
+F: @?;                      # local inference: the first assignment fixes it
+$F = 123;
+$stdout = F;                # 123
+# $F = "abc";              # ILLEGAL: F is int
 
 G: [?] int;
-G $(int => 1) <- "1"; # OK
-G $(int => ?) <- "is_int"; OK
+G $[n: int => ?] = 1;
+$stdout = (G 5);
 
-G $[X: int => ?] <- "is_int"; # DIFFERENT SYNTAX FOR UNPACKING
+H: [@T] int;
+H $[int] = 1;
+$stdout = (H int);
 
-
-
-
-F: [X: @T] int;
-
-F $[int] 
-
-
-fmap: [data: @C @T] [func: [@T] @U] @C @U;
-fmap $(new_rec) $[func:] = new_rec;
-fmap $(unshift_rec $[X:] $[Y:]) $[func:] =
-	unshift_rec (func X) (fmap Y func);
-
-
-
-
-shape: [?];
-
-point: `` => new_point 
-shape $[point => ?];
-shape $[rectangle => ?];
-shape $[circle => ?];
-
-
-
-collide: [arg1: ? <- shape arg1] [arg2: ? <- shape arg2] 
-
-
+stdout: ?;                  # the sink is dynamic

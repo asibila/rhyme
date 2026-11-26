@@ -9,6 +9,6 @@
 # needs: the `rec` type from 03-rec-type.rhy
 
 count: [xs: rec ()] rec ();
-$count <- ... new_rec;
-count $(new_rec) <- new_rec;
-count $(unshift_rec $[X:] $[Y:]) <- unshift_rec () (count Y);
+$count = ... new_rec;
+count $(new_rec) = new_rec;
+count $(unshift_rec $[X:] $[Y:]) = unshift_rec () (count Y);

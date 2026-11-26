@@ -4,5 +4,5 @@
 # the value side of a typed pair, as in $(int => ?).
 
 F: [int] string;
-$F <- [x:] "";
-F $(?) <- "any";        # error: use $[X:] to ignore the slot
+$F = [x:] "";
+F $(?) = "any";        # error: use $[X:] to ignore the slot
